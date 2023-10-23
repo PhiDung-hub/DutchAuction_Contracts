@@ -1,34 +1,86 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-contract DutchAuction {
-    uint256 public MAX_SUPPLY = 1000000;
-    uint256 public amountAuctioned;
-    uint256 public currentSupply;
-    uint256 public startingPrice;
-    uint256 public discountRate;
-    uint256 public minimumPrice;
-    uint256 public auctionStartTime;
-    uint256 public auctionDuration;
+import "./TulipToken.sol";
 
-    function startAuction(uint256 startingPrice, uint256 discountRate, uint256 lowestPrice, uint256 amount, uint256 auctionTime) public {
-        require(amountAuctioned + amount <= MAX_SUPPLY, "The number of tokens minted exceeds the maximum supply");
-        currentSupply = amount;
-        startingPrice = startingPrice;
-        discountRate = discountRate;
-        minimumPrice = lowestPrice;
-        auctionDuration = auctionTime;
-        auctionStartTime = block.timestamp;
+contract DutchAuction {
+    // Auction's properties
+    TulipToken public token;
+
+    uint256 public currentTokenSupply;
+
+    uint256 public startingPrice;
+    uint256 public reservePrice;
+    uint256 private discountRate;
+
+    uint256 public startTime;
+    uint256 public duration;
+    uint256 private endTime;
+
+    // Auction's states
+    enum AuctionState {OPENED, CLOSED}
+    AuctionState public currentState;
+
+    function startAuction(ERC20 _token,
+    uint256 initialTokenSupply,
+    uint256 _startingPrice,
+    uint256 _reservePrice,
+    uint256 _duration) public
+    {
+        // Check if there's another Dutch auction happening
+        require(currentState == AuctionState.CLOSED,
+        "Another Dutch auction is happening. Please wait...");
+
+        token = _token;
+
+        require(_token.totalSupply() + initialTokenSupply <= _token.maxSupply(), 
+        "The number of tokens minted exceeds the maximum possible supply!");
+        currentTokenSupply = initialTokenSupply;
+
+        startingPrice = _startingPrice;
+        reservePrice = _reservePrice;
+        discountRate = (_startingPrice - _reservePrice) / _duration;
+        
+        startTime = block.timestamp;
+        duration = _duration;
+        endTime = startTime + duration;
+
+        currentState = AuctionState.OPENED;
+
+        mapping(address => uint256) bidderToAmount;
+        mapping(address => uint256) bidderToEther;
+
+        // Minting the initial token supply to the DutchAuction contract
+        _token.operatorMint(initialTokenSupply);
     }
 
-    function getPrice() public returns (uint256 price) {
-        if (startingPrice < discountRate * (block.timestamp - auctionStartTime) + minimumPrice){
-            return minimumPrice;
-        }
+    function getPrice() private returns (uint256 price) {
         return startingPrice - discountRate * (block.timestamp - auctionStartTime);
     }
 
-    function bid(uint256 amount) external {
+    function isAuctioning() private returns (bool isAuctioning) {
+        if (currentState == AuctionState.OPENED && block.timestamp <= endTime){
+            return true;
+        }
+        return false;
+    }
+
+    function bid(uint256 amount) external payable {
+        // Check if currentTokenSupply >= amount
+        require(amount <= currentTokenSupply, "Not enough tokens left to service the bid.");
+        
+        // Bidder to transfer the amount they have to commit for the bid
+        unit256 cost = amount * getPrice();
+        require(msg.value >= cost, "Bidder needs to commit enough ether for their bid!");
+        bidderToAmount[msg.sender] += amount;
+        bidderToEther[msg.sender] += msg.value;
+    }
+
+    receive() external payable {
+
+    }
+
+    fallback() external payable {
 
     }
 }

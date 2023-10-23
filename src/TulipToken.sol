@@ -2,10 +2,13 @@
 pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-contract Token is ERC20 {
+
+contract TulipToken is ERC20, ERC20Detailed, ERC20Burnable {
+    uint256 public immutable maxSupply;
     address public operator;
 
-    constructor(address operator){
+    constructor(unit256 _maxSupply, address operator) ERC20Detailed("Tulip", "TL", 18) public {
+        maxSupply = _maxSupply;
         operator = operator;
     }
 
