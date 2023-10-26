@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "./TulipToken.sol";
+import {TulipToken} from "./TulipToken.sol";
 
 contract DutchAuction {
     // Auction's properties
@@ -21,7 +21,10 @@ contract DutchAuction {
     enum AuctionState {OPENED, CLOSED}
     AuctionState public currentState;
 
-    function startAuction(ERC20 _token,
+    mapping(address => uint256) bidderToAmount;
+    mapping(address => uint256) bidderToEther;
+
+    function startAuction(TulipToken _token,
     uint256 initialTokenSupply,
     uint256 _startingPrice,
     uint256 _reservePrice,
@@ -47,18 +50,15 @@ contract DutchAuction {
 
         currentState = AuctionState.OPENED;
 
-        mapping(address => uint256) bidderToAmount;
-        mapping(address => uint256) bidderToEther;
-
         // Minting the initial token supply to the DutchAuction contract
         _token.operatorMint(initialTokenSupply);
     }
 
-    function getPrice() private returns (uint256 price) {
-        return startingPrice - discountRate * (block.timestamp - auctionStartTime);
+    function getPrice() view private returns (uint256 price) {
+        return startingPrice - discountRate * (block.timestamp - startTime);
     }
 
-    function isAuctioning() private returns (bool _isAuctioning) {
+    function isAuctioning() view private returns (bool _isAuctioning) {
         if (currentState == AuctionState.OPENED && block.timestamp <= endTime){
             return true;
         }
@@ -70,7 +70,7 @@ contract DutchAuction {
         require(amount <= currentTokenSupply, "Not enough tokens left to service the bid.");
         
         // Bidder to transfer the amount they have to commit for the bid
-        unit256 cost = amount * getPrice();
+        uint256 cost = amount * getPrice();
         require(msg.value >= cost, "Bidder needs to commit enough ether for their bid!");
         bidderToAmount[msg.sender] += amount;
         bidderToEther[msg.sender] += msg.value;
