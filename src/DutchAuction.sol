@@ -58,7 +58,7 @@ contract DutchAuction {
         return startingPrice - discountRate * (block.timestamp - auctionStartTime);
     }
 
-    function isAuctioning() private returns (bool isAuctioning) {
+    function isAuctioning() private returns (bool _isAuctioning) {
         if (currentState == AuctionState.OPENED && block.timestamp <= endTime){
             return true;
         }
@@ -74,13 +74,5 @@ contract DutchAuction {
         require(msg.value >= cost, "Bidder needs to commit enough ether for their bid!");
         bidderToAmount[msg.sender] += amount;
         bidderToEther[msg.sender] += msg.value;
-    }
-
-    receive() external payable {
-
-    }
-
-    fallback() external payable {
-
     }
 }
