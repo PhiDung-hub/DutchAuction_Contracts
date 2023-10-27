@@ -6,28 +6,30 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 contract DutchAuction is Ownable {
-    // Auction's properties
     TulipToken public token;
 
-    uint256 public currentTokenSupply;
     uint256 public initialTokenSupply;
 
     uint256 public startingPrice;
     uint256 public reservePrice;
     uint256 public discountRate;
+    uint256 public clearingPrice;
 
     uint256 public startTime;
     uint256 public duration;
     uint256 public expectedEndTime;
     uint256 public actualEndTime;
 
-    uint256 public bidLimit; // Percentage point of total initial supply that a single bidder can bid
-
     bool public auctionIsStarted = false;
 
-    address[] private bidders;
-    mapping(address => uint256) bidderToAmount; // amount of tokens that bidder bids for
-    mapping(address => uint256) bidderToEther; // amount of Ether that bidder has committed
+    uint256 public totalWeiCommitted;
+    struct commitment {
+        address bidder;
+        uint256 amount;
+        uint256 price;
+    }
+    commitment[] private commitments;
+    mapping(address => uint256) private bidderToWei;
 
 
     constructor(address initialOwner) Ownable(initialOwner) {}
@@ -36,8 +38,8 @@ contract DutchAuction is Ownable {
     uint256 _initialTokenSupply,
     uint256 _startingPrice,
     uint256 _reservePrice,
-    uint256 _duration,
-    uint256 _bidLimit) public
+    uint256 _duration  // in minutes
+    ) external onlyOwner
     {
         // Check if there's another Dutch auction happening
         require(!auctionIsStarted, "Another Dutch auction is happening. Please wait...");
@@ -46,15 +48,15 @@ contract DutchAuction is Ownable {
 
         require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
         "The number of tokens minted exceeds the maximum possible supply!");
-        currentTokenSupply = _initialTokenSupply;
         initialTokenSupply = _initialTokenSupply;
 
         startingPrice = _startingPrice;
         reservePrice = _reservePrice;
         discountRate = (_startingPrice - _reservePrice) / _duration;
+        clearingPrice = _reservePrice;
         
         startTime = block.timestamp;
-        duration = _duration;
+        duration = _duration * 60;
         expectedEndTime = startTime + duration;
 
         bidLimit = _bidLimit;
@@ -65,90 +67,133 @@ contract DutchAuction is Ownable {
         _token.operatorMint(initialTokenSupply);
     }
 
-    function getPrice() view public returns (uint256) {
-        return startingPrice - discountRate * (block.timestamp - startTime);
+    // Bidder commits ether
+    function bid() external payable {
+        uint256 committedAmount = msg.value;
+        require(committedAmount == 0, "No amount of Wei has been committed.");
+
+        uint256 currentPrice = getPrice();
+
+        // Can only bid if the auction is still happening, else, refund
+        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
+        if(!isAuctioning()){
+            refund(msg.sender, committedAmount);
+        }
+
+        // Store the commitments (bidder, amount, price), and the total commitment per bidder
+        commitments.push(commitment(msg.sender, committedAmount, currentPrice));
+        bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
+        totalWeiCommitted += committedAmount;
+
+        uint256 desiredNumOfTokens = committedAmount / currentPrice;
+        if(desiredNumOfTokens >= currentTokenSupply) {
+            actualEndTime = block.timestamp;
+            clearingPrice = currentPrice;
+        }
     }
 
-    function isAuctioning() view private returns (bool) {
-        if (auctionIsStarted && block.timestamp <= expectedEndTime && currentTokenSupply > 0){
+    // function bidAtPrice(uint256 desiredPrice) external payable {
+    //     // Check if the auction is still happening
+    //     require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
+
+    //     uint256 committedAmount = msg.value;
+    //     require(committedAmount == 0, "No amount of Wei has been committed.");
+
+    //     require(startingPrice >= desiredPrice >= reservePrice, "Desired price not within starting price and reserve price.");
+    //     require(desiredPrice % discountRate == 0, 
+    //     string(abi.encodePacked("Desired price must be in the unit of the discount rate: ",
+    //     Strings.toString(discountRate), ".")));
+
+    //     uint256 currentPrice = getPrice();
+    //     require(desiredPrice < currentPrice, 
+    //     string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
+    //     Strings.toString(desiredPrice), ".")));
+        
+    //     uint256 desiredNumOfTokens = committedAmount / desiredPrice;
+    //     commitments.push(commitment(msg.sender, committedAmount, currentPrice));
+    //     bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
+    //     totalWeiCommitted += committedAmount;
+    // }
+
+    function refund(address payable _to, uint256 amount) private {
+        // Call returns a boolean value indicating success or failure.
+        require(amount > 0, "No amount to refund");
+        (bool sent, bytes memory data) = _to.call{value: amount}("");
+        require(sent, "Failed to refund Ether");
+    }
+
+    function isAuctioning() view public returns (bool) {
+        if (auctionIsStarted && block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0){
             return true;
         }
         return false;
     }
 
-    function bid(uint256 amount) external payable {
-        // Check if the auction is still happening
-        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
-
-        // Check if currentTokenSupply >= amount
-        require(amount <= currentTokenSupply, "Not enough tokens left to service the bid.");
-
-        // Check if bid exceeds that person's threshold
-        require(amount + bidderToAmount[msg.sender] <= bidLimit * initialTokenSupply,
-        string(abi.encodePacked("Bidder cannot bid a total more than", 
-        Strings.toString(bidLimit), 
-        "% of the total number of tokens offered.")));
-        
-        // Bidder to transfer the amount they have to commit for the bid
-        uint256 requiredCost = amount * getPrice();
-        require(msg.value >= requiredCost, "Bidder needs to commit enough ether for their bid!");
-
-        bidders.push(msg.sender);
-        bidderToAmount[msg.sender] += amount;
-        bidderToEther[msg.sender] += msg.value;
-        currentTokenSupply -= amount;
-
-        if (currentTokenSupply == 0){
-            actualEndTime = block.timestamp;
+    function getCurrentTokenSupply() view public returns(uint256) {
+        uint256 currentPrice = getPrice();
+        if (totalWeiCommitted / currentPrice >= initialTokenSupply){
+            return 0;
         }
+        return initialTokenSupply - totalWeiCommitted / currentPrice;
     }
 
-    // block or price?
-    // function bidAtPrice(uint256 amount, uint256 price) external payable {
-    //     // // Check if currentTokenSupply >= amount
-    //     // require(amount <= currentTokenSupply, "Not enough tokens left to service the bid.");
-        
-    //     // Bidder to transfer the amount they have to commit for the bid
-    //     uint256 requiredCost = amount * getPrice();
-    //     require(msg.value >= requiredCost, "Bidder needs to commit enough ether for their bid!");
-    //     bidderToAmount[msg.sender] += amount;
-    //     bidderToEther[msg.sender] += msg.value;
-    //     currentTokenSupply -= amount;
-    // }
+    function getCurrentTokenSupplyAtPrice(uint256 _currentPrice) view public returns(uint256) {
+        if (totalWeiCommitted / _currentPrice >= initialTokenSupply){
+            return 0;
+        }
+        return initialTokenSupply - totalWeiCommitted / _currentPrice;
+    }
 
-    // Distribute tokens, refund 
-    function clearAuction() external onlyOwner {
+    function getPrice() view public returns (uint256) {
+        if (block.timestamp > expectedEndTime) {
+            return reservePrice;
+        }
+        return startingPrice - discountRate * (block.timestamp - startTime);
+    }
+
+    // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens
+    function settleAuction() external onlyOwner {
         // Check if auction has started and ended
         require(auctionIsStarted, "No auction has started.");
-        require(block.timestamp > expectedEndTime || currentTokenSupply == 0, "Auction has not ended.");
+        require(block.timestamp > expectedEndTime || getCurrentTokenSupply() == 0, "Auction has not ended.");
 
         // Distribute tokens to successful bidders
-        for (uint256 i; i < bidders.length; i++) {
-            uint256 winningAmount = bidderToAmount[bidders[i]];
-            bidderToAmount[bidders[i]] = 0;
-            token.transfer(bidders[i], winningAmount);
+        // If we got bidAtPrice function, need to sort commitments by price then priority
+        uint256 numberOfCommitments = commitments.length;
+        for (uint256 i = 0; i < numberOfCommitments - 1; i++) {
+            token.transfer(commitments[i].bidder, commitments[i].amount / clearingPrice);
         }
 
-        // Burn the remaining tokens
-        token.burn(currentTokenSupply);
-        currentTokenSupply = 0;
+        uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
+        if (totalNumberOfTokensCommitted >= initialTokenSupply){
+            uint256 unsatisfiedCommitmentAmount = totalWeiCommitted - initialTokenSupply * clearingPrice;
+            uint256 satisfiedCommitmentAmount = commitments[numberOfCommitments - 1].amount - unsatisfiedCommitmentAmount;
 
-        // Refund ether to unsuccessful bidders
+            // Refund the unsatisfied commitment amount
+            if (unsatisfiedCommitmentAmount > 0){
+                refund(commitments[numberOfCommitments - 1].bidder, unsatisfiedCommitmentAmount);
+            }
+
+            // Transfer the satisfied number of tokens
+            token.transfer(commitments[numberOfCommitments - 1].bidder, satisfiedCommitmentAmount / clearingPrice);
+        }
+        else {
+            // Burn the remaining tokens
+            token.burn(initialTokenSupply - totalNumberOfTokensCommitted);
+        }
 
         // Close the auction
         auctionIsStarted = false;
     }
 
-    function withdraw() public {
-        // Check if auction has started and ended for at least 10 mins
+    function withdraw() external {
+        // Can only withdraw when auction has started and ended for at least 10 mins
         require(auctionIsStarted, "No auction has started.");
         require(block.timestamp > expectedEndTime + 10 * 60 || 
-        (currentTokenSupply == 0 && block.timestamp > actualEndTime + 10 * 60 ), 
+        (getCurrentTokenSupply() == 0 && block.timestamp > actualEndTime + 10 * 60 ), 
         "Auction has not ended.");
 
-        uint256 winningAmount = bidderToAmount[msg.sender];
-        require(winningAmount > 0, "You have nothing to withdraw.");
-        bidderToAmount[msg.sender] = 0;
-        token.transfer(msg.sender, winningAmount);
+        // Todo
+        // token.transfer(msg.sender, winningAmount);
     }
 }
