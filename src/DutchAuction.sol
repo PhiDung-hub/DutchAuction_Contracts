@@ -59,8 +59,6 @@ contract DutchAuction is Ownable {
         duration = _duration * 60;
         expectedEndTime = startTime + duration;
 
-        bidLimit = _bidLimit;
-
         auctionIsStarted = true;
 
         // Minting the initial token supply to the DutchAuction contract
@@ -86,7 +84,7 @@ contract DutchAuction is Ownable {
         totalWeiCommitted += committedAmount;
 
         uint256 desiredNumOfTokens = committedAmount / currentPrice;
-        if(desiredNumOfTokens >= currentTokenSupply) {
+        if(desiredNumOfTokens >= getCurrentTokenSupplyAtPrice(currentPrice)) {
             actualEndTime = block.timestamp;
             clearingPrice = currentPrice;
         }
@@ -115,7 +113,7 @@ contract DutchAuction is Ownable {
     //     totalWeiCommitted += committedAmount;
     // }
 
-    function refund(address payable _to, uint256 amount) private {
+    function refund(address _to, uint256 amount) private {
         // Call returns a boolean value indicating success or failure.
         require(amount > 0, "No amount to refund");
         (bool sent, bytes memory data) = _to.call{value: amount}("");
