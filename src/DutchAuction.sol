@@ -32,7 +32,7 @@ contract DutchAuction is Ownable {
     mapping(address => uint256) private bidderToWei;
 
 
-    constructor(address initialOwner) Ownable(initialOwner) {
+    constructor() Ownable(msg.sender) {
         auctionIsStarted = false;
     }
 
