@@ -20,7 +20,7 @@ contract DutchAuction is Ownable {
     uint256 public expectedEndTime;
     uint256 public actualEndTime;
 
-    bool public auctionIsStarted = false;
+    bool public auctionIsStarted;
 
     uint256 public totalWeiCommitted;
     struct commitment {
@@ -32,7 +32,9 @@ contract DutchAuction is Ownable {
     mapping(address => uint256) private bidderToWei;
 
 
-    constructor(address initialOwner) Ownable(initialOwner) {}
+    constructor(address initialOwner) Ownable(initialOwner) {
+        auctionIsStarted = false;
+    }
 
     function startAuction(TulipToken _token,
     uint256 _initialTokenSupply,
