@@ -16,7 +16,7 @@ contract TulipToken is ERC20, ERC20Burnable, Ownable {
     }
 
     function operatorMint(uint256 amount) external onlyOwner {
-        require(totalSupply() + amount <= maxSupply, "Minting the specified amount will cause number of tokens to exceed its max supply");
+        require(totalSupply() + amount <= maxSupply, "Minting the specified amount will cause number of tokens to exceed its max supply.");
         _mint(operator, amount);
     }
 }
