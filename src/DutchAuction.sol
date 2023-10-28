@@ -113,42 +113,6 @@ contract DutchAuction is Ownable {
     //     totalWeiCommitted += committedAmount;
     // }
 
-    function refund(address _to, uint256 amount) private {
-        // Call returns a boolean value indicating success or failure.
-        require(amount > 0, "No amount to refund");
-        (bool sent, bytes memory data) = _to.call{value: amount}("");
-        require(sent, "Failed to refund Ether");
-    }
-
-    function isAuctioning() view public returns (bool) {
-        if (auctionIsStarted && block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0){
-            return true;
-        }
-        return false;
-    }
-
-    function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 currentPrice = getPrice();
-        if (totalWeiCommitted / currentPrice >= initialTokenSupply){
-            return 0;
-        }
-        return initialTokenSupply - totalWeiCommitted / currentPrice;
-    }
-
-    function getCurrentTokenSupplyAtPrice(uint256 _currentPrice) view public returns(uint256) {
-        if (totalWeiCommitted / _currentPrice >= initialTokenSupply){
-            return 0;
-        }
-        return initialTokenSupply - totalWeiCommitted / _currentPrice;
-    }
-
-    function getPrice() view public returns (uint256) {
-        if (block.timestamp > expectedEndTime) {
-            return reservePrice;
-        }
-        return startingPrice - discountRate * (block.timestamp - startTime);
-    }
-
     // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens
     function settleAuction() external onlyOwner {
         // Check if auction has started and ended
@@ -193,5 +157,41 @@ contract DutchAuction is Ownable {
 
         // Todo
         // token.transfer(msg.sender, winningAmount);
+    }
+
+    function refund(address _to, uint256 amount) private {
+        // Call returns a boolean value indicating success or failure.
+        require(amount > 0, "No amount to refund");
+        (bool sent, bytes memory data) = _to.call{value: amount}("");
+        require(sent, "Failed to refund Ether");
+    }
+
+    function isAuctioning() view public returns (bool) {
+        if (auctionIsStarted && block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0){
+            return true;
+        }
+        return false;
+    }
+
+    function getCurrentTokenSupply() view public returns(uint256) {
+        uint256 currentPrice = getPrice();
+        if (totalWeiCommitted / currentPrice >= initialTokenSupply){
+            return 0;
+        }
+        return initialTokenSupply - totalWeiCommitted / currentPrice;
+    }
+
+    function getCurrentTokenSupplyAtPrice(uint256 _currentPrice) view public returns(uint256) {
+        if (totalWeiCommitted / _currentPrice >= initialTokenSupply){
+            return 0;
+        }
+        return initialTokenSupply - totalWeiCommitted / _currentPrice;
+    }
+
+    function getPrice() view public returns (uint256) {
+        if (block.timestamp > expectedEndTime) {
+            return reservePrice;
+        }
+        return startingPrice - discountRate * (block.timestamp - startTime);
     }
 }
