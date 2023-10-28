@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 
-contract TulipToken is ERC20, ERC20Burnable { // allow user to burn their own token or not?
+contract TulipToken is ERC20, ERC20Burnable {
     uint256 public immutable maxSupply;
     address public operator;
 
@@ -16,9 +16,5 @@ contract TulipToken is ERC20, ERC20Burnable { // allow user to burn their own to
 
     function operatorMint(uint256 amount) public {
         _mint(operator, amount);
-    }
-
-    function operatorBurn(uint256 amount) public {
-        _burn(operator, amount);
     }
 }
