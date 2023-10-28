@@ -22,7 +22,7 @@ contract DutchAuction is Ownable {
 
     bool public auctionIsStarted;
 
-    uint256 public totalWeiCommitted;
+    uint256 private totalWeiCommitted;
     struct commitment {
         address bidder;
         uint256 amount;
@@ -51,15 +51,16 @@ contract DutchAuction is Ownable {
         require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
         "The number of tokens minted exceeds the maximum possible supply!");
         initialTokenSupply = _initialTokenSupply;
-
-        startingPrice = _startingPrice;
-        reservePrice = _reservePrice;
-        discountRate = (_startingPrice - _reservePrice) / _duration;
-        clearingPrice = _reservePrice;
         
         startTime = block.timestamp;
         duration = _duration * 60;
         expectedEndTime = startTime + duration;
+        actualEndTime = expectedEndTime;
+
+        startingPrice = _startingPrice;
+        reservePrice = _reservePrice;
+        discountRate = (_startingPrice - _reservePrice) / duration;
+        clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
 
