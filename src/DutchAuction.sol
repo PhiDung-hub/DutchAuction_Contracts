@@ -71,14 +71,14 @@ contract DutchAuction is Ownable {
     // Bidder commits ether
     function bid() external payable {
         uint256 committedAmount = msg.value;
-        require(committedAmount == 0, "No amount of Wei has been committed.");
+        require(committedAmount > 0, "No amount of Wei has been committed.");
 
         uint256 currentPrice = getPrice();
 
         // Can only bid if the auction is still happening, else, refund
-        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
         if(!isAuctioning()){
             refund(msg.sender, committedAmount);
+            revert ("No auction happening at the moment. Please wait for the next auction.");
         }
 
         // Store the commitments (bidder, amount, price), and the total commitment per bidder

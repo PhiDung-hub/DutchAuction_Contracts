@@ -31,8 +31,8 @@ contract DutchAuctionTest is Test {
 
     function test_StartAuction() public {
         uint256 initialTokenSupply = 100000;
-        uint256 startingPrice = 1100000;
-        uint256 reservePrice = 100000;
+        uint256 startingPrice = 100000;
+        uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
         uint256 durationInSeconds = durationInMinutes * 60;
 
@@ -52,4 +52,43 @@ contract DutchAuctionTest is Test {
         assertEq(dutchAuction.actualEndTime(), dutchAuction.expectedEndTime());
         assertTrue(dutchAuction.auctionIsStarted());
     }
+
+    function startValidDutchAuction() private {
+        uint256 initialTokenSupply = 100000;
+        uint256 startingPrice = 100000;
+        uint256 reservePrice = 10000;
+        uint256 durationInMinutes = 20;
+        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes);
+    }
+
+    function test_Bid_RevertWhen_NoWeiIsCommitted() public {
+        startValidDutchAuction();
+        vm.expectRevert("No amount of Wei has been committed.");
+        dutchAuction.bid{value:0}();
+    }
+
+    function test_Bid_RefundAndRevertWhen_NoAuctionIsHappening() public {
+        uint256 committedAmount = 50000;
+        vm.expectCall(
+            address(this), committedAmount, ""
+        );
+        vm.expectRevert("No auction happening at the moment. Please wait for the next auction.");
+        dutchAuction.bid{value:committedAmount}();
+    }
+
+    function test_Bid() public {
+        startValidDutchAuction();
+        uint256 committedAmount = 50000000;
+        dutchAuction.bid{value:committedAmount}();
+    }
+
+    function test_Bid_SoldOutAuction() public {
+        startValidDutchAuction();
+        dutchAuction.bid{value:5 * 10 ** 9}();
+        dutchAuction.bid{value:6 * 10 ** 9}();  // how to simulate this bid coming quite significantly later than the first bid?
+        assertEq(dutchAuction.getPrice(), dutchAuction.clearingPrice());
+        assertEq(block.timestamp, dutchAuction.actualEndTime());
+    }
+
+    receive() external payable {}
 }
