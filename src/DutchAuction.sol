@@ -22,6 +22,8 @@ contract DutchAuction is Ownable {
 
     bool public auctionIsStarted;
 
+    uint256 public bidderPercentageLimit;
+    uint256 public maxWeiPerBidder;
     uint256 private totalWeiCommitted;
     struct commitment {
         address bidder;
@@ -40,8 +42,8 @@ contract DutchAuction is Ownable {
     uint256 _initialTokenSupply,
     uint256 _startingPrice,
     uint256 _reservePrice,
-    uint256 _duration  // in minutes
-    ) external onlyOwner
+    uint256 _duration,  // in minutes
+    uint256 _bidderPercentageLimit) external onlyOwner
     {
         // Check if there's another Dutch auction happening
         require(!auctionIsStarted, "Another Dutch auction is happening. Please wait...");
@@ -64,6 +66,9 @@ contract DutchAuction is Ownable {
 
         auctionIsStarted = true;
 
+        bidderPercentageLimit = _bidderPercentageLimit;
+        maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
+
         // Minting the initial token supply to the DutchAuction contract
         _token.operatorMint(initialTokenSupply);
     }
@@ -73,13 +78,20 @@ contract DutchAuction is Ownable {
         uint256 committedAmount = msg.value;
         require(committedAmount > 0, "No amount of Wei has been committed.");
 
-        uint256 currentPrice = getPrice();
-
         // Can only bid if the auction is still happening, else, refund
-        if(!isAuctioning()){
-            refund(msg.sender, committedAmount);
-            revert ("No auction happening at the moment. Please wait for the next auction.");
+        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
+
+        // A bidder's total commitment must be smaller than maxWeiPerBidder.
+        require(bidderToWei[msg.sender] < maxWeiPerBidder, "Already reach the maximum total Wei committed.");
+        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
+        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[msg.sender];
+        if (committedAmount > maxComAmt){
+            uint256 refundAmt = committedAmount - maxComAmt;
+            committedAmount = maxComAmt;
+            refund(msg.sender, refundAmt);
         }
+
+        uint256 currentPrice = getPrice();
 
         // Store the commitments (bidder, amount, price), and the total commitment per bidder
         commitments.push(commitment(msg.sender, committedAmount, currentPrice));

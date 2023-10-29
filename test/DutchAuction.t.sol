@@ -19,14 +19,14 @@ contract DutchAuctionTest is Test {
     }
 
     function test_StartAuction_RevertWhen_AnotherAuctionIsHappening() public {
-        dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20);
+        dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
         vm.expectRevert("Another Dutch auction is happening. Please wait...");
-        dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20);
+        dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
     }
 
     function test_StartAuction_RevertWhen_ExceedMaxTokenSupply() public {
         vm.expectRevert("The number of tokens minted exceeds the maximum possible supply!");
-        dutchAuction.startAuction(tulipToken, 1000001, 100, 20, 20);
+        dutchAuction.startAuction(tulipToken, 1000001, 100, 20, 20, 10);
     }
 
     function test_StartAuction() public {
@@ -35,11 +35,12 @@ contract DutchAuctionTest is Test {
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
         uint256 durationInSeconds = durationInMinutes * 60;
+        uint256 bidderPercentageLimit = 10;
 
         vm.expectCall(
             address(tulipToken), abi.encodeCall(tulipToken.operatorMint, initialTokenSupply)
         );
-        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes);
+        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
         
         assertEq(initialTokenSupply, dutchAuction.initialTokenSupply());
         assertEq(startingPrice, dutchAuction.startingPrice());
@@ -51,6 +52,8 @@ contract DutchAuctionTest is Test {
         assertEq(block.timestamp + durationInSeconds, dutchAuction.expectedEndTime());
         assertEq(dutchAuction.actualEndTime(), dutchAuction.expectedEndTime());
         assertTrue(dutchAuction.auctionIsStarted());
+        assertEq(bidderPercentageLimit, dutchAuction.bidderPercentageLimit());
+        assertEq(initialTokenSupply * bidderPercentageLimit / 100 * reservePrice, dutchAuction.maxWeiPerBidder());
     }
 
     function startValidDutchAuction() private {
@@ -58,7 +61,8 @@ contract DutchAuctionTest is Test {
         uint256 startingPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
-        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes);
+        uint256 bidderPercentageLimit = 100000;
+        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
     }
 
     function test_Bid_RevertWhen_NoWeiIsCommitted() public {
@@ -67,13 +71,31 @@ contract DutchAuctionTest is Test {
         dutchAuction.bid{value:0}();
     }
 
-    function test_Bid_RefundAndRevertWhen_NoAuctionIsHappening() public {
-        uint256 committedAmount = 50000;
-        vm.expectCall(
-            address(this), committedAmount, ""
-        );
+    function test_Bid_RevertWhen_NoAuctionIsHappening() public {
         vm.expectRevert("No auction happening at the moment. Please wait for the next auction.");
-        dutchAuction.bid{value:committedAmount}();
+        dutchAuction.bid{value:50000}();
+    }
+
+    function test_Bid_RevertWhen_NoAuctionIsHappeningBecauseSoldOut() public {
+        startValidDutchAuction();
+        dutchAuction.bid{value:100000 * 100000}();
+        vm.expectRevert("No auction happening at the moment. Please wait for the next auction.");
+        dutchAuction.bid{value:1}();
+    }
+
+    function test_Bid_RevertWhen_CurrentTotalCommitmentReachesMax() public {
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
+        dutchAuction.bid{value:10000 * 10000}();
+        vm.expectRevert("Already reach the maximum total Wei committed.");
+        dutchAuction.bid{value:1}();
+    }
+
+    function test_Bid_RefundBidAmountExceedingMax() public {
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
+        vm.expectCall(
+            address(this), 5, ""
+        );
+        dutchAuction.bid{value:10000 * 10000 + 5}();
     }
 
     function test_Bid() public {
