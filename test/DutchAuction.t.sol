@@ -107,7 +107,7 @@ contract DutchAuctionTest is Test {
         startValidDutchAuction();
         dutchAuction.bid{value:5 * 10 ** 9}();
         dutchAuction.bid{value:6 * 10 ** 9}();  // how to simulate this bid coming quite significantly later than the first bid?
-        assertEq(dutchAuction.getPrice(), dutchAuction.clearingPrice());
+        assertEq(dutchAuction.getCurrentPrice(), dutchAuction.clearingPrice());
         assertEq(block.timestamp, dutchAuction.actualEndTime());
     }
 

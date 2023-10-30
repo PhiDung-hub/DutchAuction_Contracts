@@ -79,7 +79,7 @@ contract DutchAuction is Ownable {
     }
 
     function bidAtPrice(uint256 desiredPrice) external payable {
-        require(desiredPrice <= getPrice(), 
+        require(desiredPrice <= getCurrentPrice(), 
         string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
         Strings.toString(desiredPrice), ".")));
 
@@ -98,7 +98,7 @@ contract DutchAuction is Ownable {
 
         if (getCurrentTokenSupply() == 0) {
             actualEndTime = block.timestamp;
-            clearingPrice = getPrice();
+            clearingPrice = getCurrentPrice();
         }
     }
 
@@ -256,7 +256,7 @@ contract DutchAuction is Ownable {
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 soldNumOfToken = getCurrentTotalWeiCommitted() / getPrice();
+        uint256 soldNumOfToken = getCurrentTotalWeiCommitted() / getCurrentPrice();
         if (soldNumOfToken >= initialTokenSupply){
             return 0;
         }
@@ -283,7 +283,7 @@ contract DutchAuction is Ownable {
         return startTime + (startingPrice - price) / discountRate * 60;
     }
 
-    function getPrice() view public returns (uint256) {
+    function getCurrentPrice() view public returns (uint256) {
         if (block.timestamp > expectedEndTime) {
             return reservePrice;
         }
