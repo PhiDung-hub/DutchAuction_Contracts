@@ -55,13 +55,13 @@ contract DutchAuction is Ownable {
         initialTokenSupply = _initialTokenSupply;
         
         startTime = block.timestamp;
-        duration = _duration * 60;
-        expectedEndTime = startTime + duration;
+        duration = _duration;
+        expectedEndTime = startTime + duration * 60;
         actualEndTime = expectedEndTime;
 
         startingPrice = _startingPrice;
         reservePrice = _reservePrice;
-        discountRate = (_startingPrice - _reservePrice) / duration;
+        discountRate = (_startingPrice - _reservePrice) / duration; // Wei per minute
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
@@ -207,6 +207,6 @@ contract DutchAuction is Ownable {
         if (block.timestamp > expectedEndTime) {
             return reservePrice;
         }
-        return startingPrice - discountRate * (block.timestamp - startTime);
+        return startingPrice - discountRate * (block.timestamp - startTime) / 60;
     }
 }

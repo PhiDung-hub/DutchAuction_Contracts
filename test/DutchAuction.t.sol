@@ -34,7 +34,6 @@ contract DutchAuctionTest is Test {
         uint256 startingPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
-        uint256 durationInSeconds = durationInMinutes * 60;
         uint256 bidderPercentageLimit = 10;
 
         vm.expectCall(
@@ -45,11 +44,11 @@ contract DutchAuctionTest is Test {
         assertEq(initialTokenSupply, dutchAuction.initialTokenSupply());
         assertEq(startingPrice, dutchAuction.startingPrice());
         assertEq(reservePrice, dutchAuction.reservePrice());
-        assertEq((startingPrice - reservePrice) / durationInSeconds, dutchAuction.discountRate());
+        assertEq((startingPrice - reservePrice) / durationInMinutes, dutchAuction.discountRate());
         assertEq(reservePrice, dutchAuction.clearingPrice());
         assertEq(block.timestamp, dutchAuction.startTime());
-        assertEq(durationInSeconds, dutchAuction.duration());
-        assertEq(block.timestamp + durationInSeconds, dutchAuction.expectedEndTime());
+        assertEq(durationInMinutes, dutchAuction.duration());
+        assertEq(block.timestamp + durationInMinutes * 60, dutchAuction.expectedEndTime());
         assertEq(dutchAuction.actualEndTime(), dutchAuction.expectedEndTime());
         assertTrue(dutchAuction.auctionIsStarted());
         assertEq(bidderPercentageLimit, dutchAuction.bidderPercentageLimit());
