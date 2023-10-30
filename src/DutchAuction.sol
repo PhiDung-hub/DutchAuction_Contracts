@@ -24,7 +24,6 @@ contract DutchAuction is Ownable {
 
     uint256 public bidderPercentageLimit;
     uint256 public maxWeiPerBidder;
-    uint256 private totalWeiCommitted;
     struct Commitment {
         address bidder;
         uint256 amount;
@@ -78,15 +77,13 @@ contract DutchAuction is Ownable {
     function bid() external payable {
         uint256 committedAmount = validateBid(msg.sender, msg.value);
 
-        uint256 currentPrice = getPrice();
-
         // Store the commitments (bidder, amount, timeCommitted, timeBidded), and the total commitment per bidder
         insertSorted(msg.sender, committedAmount, block.timestamp, block.timestamp);
         bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
-        totalWeiCommitted += committedAmount;
 
+        uint256 currentPrice = getPrice();
         uint256 desiredNumOfTokens = committedAmount / currentPrice;
-        if(desiredNumOfTokens >= getCurrentTokenSupplyAtPrice(currentPrice)) {
+        if (desiredNumOfTokens >= getCurrentTokenSupply()) {
             actualEndTime = block.timestamp;
             clearingPrice = currentPrice;
         }
@@ -183,7 +180,6 @@ contract DutchAuction is Ownable {
     //     uint256 desiredNumOfTokens = committedAmount / desiredPrice;
     //     commitments.push(commitment(msg.sender, committedAmount, currentPrice));
     //     bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
-    //     totalWeiCommitted += committedAmount;
     // }
 
     function validateBid(address bidder, uint256 committedAmount) private returns (uint256 actualCommittedAmount) {
@@ -218,6 +214,7 @@ contract DutchAuction is Ownable {
             token.transfer(commitments[i].bidder, commitments[i].amount / clearingPrice);
         }
 
+        uint256 totalWeiCommitted = getCurrentTotalWeiCommitted();
         uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
         if (totalNumberOfTokensCommitted >= initialTokenSupply){
             uint256 unsatisfiedCommitmentAmount = totalWeiCommitted - initialTokenSupply * clearingPrice;
@@ -266,22 +263,25 @@ contract DutchAuction is Ownable {
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 currentPrice = getPrice();
-        if (totalWeiCommitted / currentPrice >= initialTokenSupply){
+        uint256 soldNumOfToken = getCurrentTotalWeiCommitted() / getPrice();
+        if (soldNumOfToken >= initialTokenSupply){
             return 0;
         }
-        return initialTokenSupply - totalWeiCommitted / currentPrice;
+        return initialTokenSupply - soldNumOfToken;
     }
 
-    function getCurrentTokenSupplyAtPrice(uint256 _currentPrice) view public returns(uint256) {
-        if (totalWeiCommitted / _currentPrice >= initialTokenSupply){
-            return 0;
+    function getCurrentTotalWeiCommitted() view internal returns(uint256) {
+        return getTotalWeiCommitted(block.timestamp);
+    }
+
+    function getTotalWeiCommitted(uint256 blockTimestamp) view internal returns(uint256) {
+        Commitment memory newCommitment = Commitment(address(123), 0, blockTimestamp, blockTimestamp);
+        uint256 rightBound = binarySearchCommitments(newCommitment, compareCommitmentsByTimeComm);
+        uint256 totalWeiCommitted = 0;
+        for (uint256 i = 0; i < rightBound; i++) {
+            totalWeiCommitted += commitments[i].amount;
         }
-        return initialTokenSupply - totalWeiCommitted / _currentPrice;
-    }
-
-    function getTotalWeiCommitted(uint256 blockTimestamp) view private returns(uint256) {
-        
+        return totalWeiCommitted;
     }
 
     function getPrice() view public returns (uint256) {
