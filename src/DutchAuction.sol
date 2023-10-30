@@ -75,11 +75,26 @@ contract DutchAuction is Ownable {
 
     // Bidder commits ether
     function bid() external payable {
-        uint256 committedAmount = validateBid(msg.sender, msg.value);
+        bidAtTimestamp(msg.sender, msg.value, block.timestamp);
+    }
+
+    function bidAtPrice(uint256 desiredPrice) external payable {
+        require(desiredPrice <= getPrice(), 
+        string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
+        Strings.toString(desiredPrice), ".")));
+
+        uint256 timeCommitted = getBlockTimestampAtPrice(desiredPrice);
+        bidAtTimestamp(msg.sender, msg.value, timeCommitted);
+    }
+
+    // Bidder commits ether
+    function bidAtTimestamp(address _bidder, uint256 _amount, uint256 _timeCommitted) internal {
+        uint256 committedAmount = validateBid(_bidder, _amount);
 
         // Store the commitments (bidder, amount, timeCommitted, timeBidded), and the total commitment per bidder
-        insertSorted(msg.sender, committedAmount, block.timestamp, block.timestamp);
-        bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
+        Commitment memory newCommitment = Commitment(_bidder, committedAmount, _timeCommitted, block.timestamp);
+        insertSorted(newCommitment);
+        bidderToWei[_bidder] = bidderToWei[_bidder] + committedAmount;
 
         if (getCurrentTokenSupply() == 0) {
             actualEndTime = block.timestamp;
@@ -87,7 +102,7 @@ contract DutchAuction is Ownable {
         }
     }
 
-    function validateBid(address bidder, uint256 committedAmount) private returns (uint256 actualCommittedAmount) {
+    function validateBid(address bidder, uint256 committedAmount) internal returns (uint256 actualCommittedAmount) {
         require(committedAmount > 0, "No amount of Wei has been committed.");
 
         // Can only bid if the auction is still happening, else, refund
@@ -106,9 +121,7 @@ contract DutchAuction is Ownable {
         return committedAmount;
     }
 
-    function insertSorted(address _bidder, uint256 _amount, uint256 _timeCommitted, uint256 _timeBidded) private {
-        Commitment memory newCommitment = Commitment(_bidder, _amount, _timeCommitted, _timeBidded);
-
+    function insertSorted(Commitment memory newCommitment) internal {
         // Binary search to find the index to insert newCommitment
         uint256 indexToInsert = binarySearchCommitments(newCommitment, compareCommitmentsByTimeCommAndBid);
         if (commitments.length == indexToInsert) { // insert after the last element
@@ -180,24 +193,6 @@ contract DutchAuction is Ownable {
             return 0;
         }
     }
-
-    // function bidAtPrice(uint256 desiredPrice) external payable {
-    //     uint256 committedAmount = validateBid(msg.sender, msg.value);
-
-    //     require(startingPrice >= desiredPrice >= reservePrice, "Desired price not within starting price and reserve price.");
-    //     require(desiredPrice % discountRate == 0, 
-    //     string(abi.encodePacked("Desired price must be in the unit of the discount rate: ",
-    //     Strings.toString(discountRate), ".")));
-
-    //     uint256 currentPrice = getPrice();
-    //     require(desiredPrice < currentPrice, 
-    //     string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
-    //     Strings.toString(desiredPrice), ".")));
-        
-    //     uint256 desiredNumOfTokens = committedAmount / desiredPrice;
-    //     commitments.push(commitment(msg.sender, committedAmount, currentPrice));
-    //     bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
-    // }
 
     // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens
     function settleAuction() external onlyOwner {
@@ -280,6 +275,12 @@ contract DutchAuction is Ownable {
             totalWeiCommitted += commitments[i].amount;
         }
         return totalWeiCommitted;
+    }
+    
+    function getBlockTimestampAtPrice(uint256 price) view public returns (uint256) {
+        require((startingPrice - price) % discountRate == 0, "Price must be in the appropriate increment.");
+        require(price >= reservePrice && price <= startingPrice, "Price not within range.");
+        return startTime + (startingPrice - price) / discountRate * 60;
     }
 
     function getPrice() view public returns (uint256) {
