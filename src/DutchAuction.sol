@@ -81,12 +81,29 @@ contract DutchAuction is Ownable {
         insertSorted(msg.sender, committedAmount, block.timestamp, block.timestamp);
         bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
 
-        uint256 currentPrice = getPrice();
-        uint256 desiredNumOfTokens = committedAmount / currentPrice;
-        if (desiredNumOfTokens >= getCurrentTokenSupply()) {
+        if (getCurrentTokenSupply() == 0) {
             actualEndTime = block.timestamp;
-            clearingPrice = currentPrice;
+            clearingPrice = getPrice();
         }
+    }
+
+    function validateBid(address bidder, uint256 committedAmount) private returns (uint256 actualCommittedAmount) {
+        require(committedAmount > 0, "No amount of Wei has been committed.");
+
+        // Can only bid if the auction is still happening, else, refund
+        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
+
+        // A bidder's total commitment must be smaller than maxWeiPerBidder.
+        require(bidderToWei[bidder] < maxWeiPerBidder, "Already reach the maximum total Wei committed.");
+        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
+        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[bidder];
+        if (committedAmount > maxComAmt) {
+            uint256 refundAmt = committedAmount - maxComAmt;
+            committedAmount = maxComAmt;
+            refund(msg.sender, refundAmt);
+        }
+
+        return committedAmount;
     }
 
     function insertSorted(address _bidder, uint256 _amount, uint256 _timeCommitted, uint256 _timeBidded) private {
@@ -181,25 +198,6 @@ contract DutchAuction is Ownable {
     //     commitments.push(commitment(msg.sender, committedAmount, currentPrice));
     //     bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
     // }
-
-    function validateBid(address bidder, uint256 committedAmount) private returns (uint256 actualCommittedAmount) {
-        require(committedAmount > 0, "No amount of Wei has been committed.");
-
-        // Can only bid if the auction is still happening, else, refund
-        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
-
-        // A bidder's total commitment must be smaller than maxWeiPerBidder.
-        require(bidderToWei[bidder] < maxWeiPerBidder, "Already reach the maximum total Wei committed.");
-        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
-        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[bidder];
-        if (committedAmount > maxComAmt) {
-            uint256 refundAmt = committedAmount - maxComAmt;
-            committedAmount = maxComAmt;
-            refund(msg.sender, refundAmt);
-        }
-
-        return committedAmount;
-    }
 
     // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens
     function settleAuction() external onlyOwner {
