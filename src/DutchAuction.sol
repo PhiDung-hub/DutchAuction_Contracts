@@ -75,22 +75,8 @@ contract DutchAuction is Ownable {
 
     // Bidder commits ether
     function bid() external payable {
-        uint256 committedAmount = msg.value;
-        require(committedAmount > 0, "No amount of Wei has been committed.");
-
-        // Can only bid if the auction is still happening, else, refund
-        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
-
-        // A bidder's total commitment must be smaller than maxWeiPerBidder.
-        require(bidderToWei[msg.sender] < maxWeiPerBidder, "Already reach the maximum total Wei committed.");
-        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
-        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[msg.sender];
-        if (committedAmount > maxComAmt){
-            uint256 refundAmt = committedAmount - maxComAmt;
-            committedAmount = maxComAmt;
-            refund(msg.sender, refundAmt);
-        }
-
+        uint256 committedAmount = validateBid(msg.sender, msg.value);
+        
         uint256 currentPrice = getPrice();
 
         // Store the commitments (bidder, amount, price), and the total commitment per bidder
@@ -103,6 +89,25 @@ contract DutchAuction is Ownable {
             actualEndTime = block.timestamp;
             clearingPrice = currentPrice;
         }
+    }
+
+    function validateBid(address bidder, uint256 committedAmount) private returns (uint256 actualCommittedAmount) {
+        require(committedAmount > 0, "No amount of Wei has been committed.");
+
+        // Can only bid if the auction is still happening, else, refund
+        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
+
+        // A bidder's total commitment must be smaller than maxWeiPerBidder.
+        require(bidderToWei[bidder] < maxWeiPerBidder, "Already reach the maximum total Wei committed.");
+        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
+        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[bidder];
+        if (committedAmount > maxComAmt) {
+            uint256 refundAmt = committedAmount - maxComAmt;
+            committedAmount = maxComAmt;
+            refund(msg.sender, refundAmt);
+        }
+
+        return committedAmount;
     }
 
     // function bidAtPrice(uint256 desiredPrice) external payable {
