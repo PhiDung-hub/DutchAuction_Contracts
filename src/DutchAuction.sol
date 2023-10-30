@@ -165,7 +165,7 @@ contract DutchAuction is Ownable {
     }
 
     // Compare commitments by timeCommitted and timeBidded
-    function compareCommitmentsByTimeCommAndBid(Commitment memory commitment1, Commitment storage commitment2) private view returns (int256) {
+    function compareCommitmentsByTimeCommAndBid(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
         if (commitment1.timeCommitted < commitment2.timeCommitted) {
             return -1;
         } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
@@ -180,17 +180,6 @@ contract DutchAuction is Ownable {
                 // If timeCommitted and timeBidded are equal, the commitments are equal
                 return 0;
             }
-        }
-    }
-
-    // Compare commitments by timeCommitted
-    function compareCommitmentsByTimeComm(Commitment memory commitment1, Commitment storage commitment2) private view returns (int256) {
-        if (commitment1.timeCommitted < commitment2.timeCommitted) {
-            return -1;
-        } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
-            return 1;
-        } else {
-            return 0;
         }
     }
 
@@ -241,7 +230,7 @@ contract DutchAuction is Ownable {
         // token.transfer(msg.sender, winningAmount);
     }
 
-    function refund(address _to, uint256 amount) private {
+    function refund(address _to, uint256 amount) internal {
         // Call returns a boolean value indicating success or failure.
         require(amount > 0, "No amount to refund");
         (bool sent, bytes memory data) = _to.call{value: amount}("");
@@ -275,6 +264,17 @@ contract DutchAuction is Ownable {
             totalWeiCommitted += commitments[i].amount;
         }
         return totalWeiCommitted;
+    }
+
+    // Compare commitments by timeCommitted
+    function compareCommitmentsByTimeComm(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
+        if (commitment1.timeCommitted < commitment2.timeCommitted) {
+            return -1;
+        } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
+            return 1;
+        } else {
+            return 0;
+        }
     }
     
     function getBlockTimestampAtPrice(uint256 price) view public returns (uint256) {
