@@ -91,6 +91,25 @@ contract DutchAuction is Ownable {
         }
     }
 
+    // function bidAtPrice(uint256 desiredPrice) external payable {
+    //     uint256 committedAmount = validateBid(msg.sender, msg.value);
+
+    //     require(startingPrice >= desiredPrice >= reservePrice, "Desired price not within starting price and reserve price.");
+    //     require(desiredPrice % discountRate == 0, 
+    //     string(abi.encodePacked("Desired price must be in the unit of the discount rate: ",
+    //     Strings.toString(discountRate), ".")));
+
+    //     uint256 currentPrice = getPrice();
+    //     require(desiredPrice < currentPrice, 
+    //     string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
+    //     Strings.toString(desiredPrice), ".")));
+        
+    //     uint256 desiredNumOfTokens = committedAmount / desiredPrice;
+    //     commitments.push(commitment(msg.sender, committedAmount, currentPrice));
+    //     bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
+    //     totalWeiCommitted += committedAmount;
+    // }
+
     function validateBid(address bidder, uint256 committedAmount) private returns (uint256 actualCommittedAmount) {
         require(committedAmount > 0, "No amount of Wei has been committed.");
 
@@ -109,29 +128,6 @@ contract DutchAuction is Ownable {
 
         return committedAmount;
     }
-
-    // function bidAtPrice(uint256 desiredPrice) external payable {
-    //     // Check if the auction is still happening
-    //     require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
-
-    //     uint256 committedAmount = msg.value;
-    //     require(committedAmount == 0, "No amount of Wei has been committed.");
-
-    //     require(startingPrice >= desiredPrice >= reservePrice, "Desired price not within starting price and reserve price.");
-    //     require(desiredPrice % discountRate == 0, 
-    //     string(abi.encodePacked("Desired price must be in the unit of the discount rate: ",
-    //     Strings.toString(discountRate), ".")));
-
-    //     uint256 currentPrice = getPrice();
-    //     require(desiredPrice < currentPrice, 
-    //     string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
-    //     Strings.toString(desiredPrice), ".")));
-        
-    //     uint256 desiredNumOfTokens = committedAmount / desiredPrice;
-    //     commitments.push(commitment(msg.sender, committedAmount, currentPrice));
-    //     bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
-    //     totalWeiCommitted += committedAmount;
-    // }
 
     // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens
     function settleAuction() external onlyOwner {
