@@ -95,40 +95,50 @@ contract DutchAuction is Ownable {
     function insertSorted(address _bidder, uint256 _amount, uint256 _timeCommitted, uint256 _timeBidded) private {
         Commitment memory newCommitment = Commitment(_bidder, _amount, _timeCommitted, _timeBidded);
 
-        // If newCommitment is larger than or equal to the last element, push it to the end
-        if (commitments.length == 0 || compareCommitments(newCommitment, commitments[commitments.length - 1]) >= 0) {
+        // Binary search to find the index to insert newCommitment
+        uint256 indexToInsert = binarySearchCommitments(newCommitment, compareCommitmentsByTimeCommAndBid);
+        if (commitments.length == indexToInsert) { // insert after the last element
             commitments.push(newCommitment);
             return;
         }
 
-        // Binary search to find the index to insert newCommitment
+        // Shift elements to the right to make space for the new commitment
+        commitments.push(commitments[commitments.length - 1]); // Expand the array by one
+        for (uint256 i = commitments.length - 2; i > indexToInsert; i--) {
+            commitments[i] = commitments[i - 1];
+        }
+        commitments[indexToInsert] = newCommitment; // Insert the new commitment
+    }
+
+    // Binary search to find the index to insert newCommitment
+    function binarySearchCommitments(Commitment memory newCommitment, 
+    function(Commitment memory, Commitment storage) internal view returns(int256) comparator)
+    internal view returns(uint256) {
+        // If no commitment, or if newCommitment is larger than or equal to the last element
+        // Index to insert is commitments.length
+        if (commitments.length == 0 || comparator(newCommitment, commitments[commitments.length - 1]) >= 0) {
+            return commitments.length;
+        }
+
         uint256 left = 0;
         uint256 right = commitments.length - 1;
         uint256 mid = 0;
 
         while (left <= right) {
             mid = (left + right) / 2;
-            int256 comparison = compareCommitments(newCommitment, commitments[mid]);
+            int256 comparison = comparator(newCommitment, commitments[mid]);
             if (comparison < 0) {
                 right = mid - 1;
-            } else if (comparison > 0) {
+            } else {
                 left = mid + 1;
                 mid = left;
             }
-            else {
-                break;
-            }
         }
-
-        // Shift elements to the right to make space for the new bid
-        commitments.push(commitments[commitments.length - 1]); // Expand the array by one
-        for (uint256 i = commitments.length - 2; i > mid; i--) {
-            commitments[i] = commitments[i - 1];
-        }
-        commitments[mid] = newCommitment; // Insert the new bid
+        return mid;
     }
 
-    function compareCommitments(Commitment memory commitment1, Commitment storage commitment2) private view returns (int256) {
+    // Compare commitments by timeCommitted and timeBidded
+    function compareCommitmentsByTimeCommAndBid(Commitment memory commitment1, Commitment storage commitment2) private view returns (int256) {
         if (commitment1.timeCommitted < commitment2.timeCommitted) {
             return -1;
         } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
@@ -143,6 +153,17 @@ contract DutchAuction is Ownable {
                 // If timeCommitted and timeBidded are equal, the commitments are equal
                 return 0;
             }
+        }
+    }
+
+    // Compare commitments by timeCommitted
+    function compareCommitmentsByTimeComm(Commitment memory commitment1, Commitment storage commitment2) private view returns (int256) {
+        if (commitment1.timeCommitted < commitment2.timeCommitted) {
+            return -1;
+        } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
+            return 1;
+        } else {
+            return 0;
         }
     }
 
