@@ -25,12 +25,13 @@ contract DutchAuction is Ownable {
     uint256 public bidderPercentageLimit;
     uint256 public maxWeiPerBidder;
     uint256 private totalWeiCommitted;
-    struct commitment {
+    struct Commitment {
         address bidder;
         uint256 amount;
-        uint256 price;
+        uint256 timeCommitted;
+        uint256 timeBidded;
     }
-    commitment[] private commitments;
+    Commitment[] private commitments;
     mapping(address => uint256) private bidderToWei;
 
 
@@ -76,11 +77,11 @@ contract DutchAuction is Ownable {
     // Bidder commits ether
     function bid() external payable {
         uint256 committedAmount = validateBid(msg.sender, msg.value);
-        
+
         uint256 currentPrice = getPrice();
 
-        // Store the commitments (bidder, amount, price), and the total commitment per bidder
-        commitments.push(commitment(msg.sender, committedAmount, currentPrice));
+        // Store the commitments (bidder, amount, timeCommitted, timeBidded), and the total commitment per bidder
+        insertSorted(msg.sender, committedAmount, block.timestamp, block.timestamp);
         bidderToWei[msg.sender] = bidderToWei[msg.sender] + committedAmount;
         totalWeiCommitted += committedAmount;
 
@@ -88,6 +89,60 @@ contract DutchAuction is Ownable {
         if(desiredNumOfTokens >= getCurrentTokenSupplyAtPrice(currentPrice)) {
             actualEndTime = block.timestamp;
             clearingPrice = currentPrice;
+        }
+    }
+
+    function insertSorted(address _bidder, uint256 _amount, uint256 _timeCommitted, uint256 _timeBidded) private {
+        Commitment memory newCommitment = Commitment(_bidder, _amount, _timeCommitted, _timeBidded);
+
+        // If newCommitment is larger than or equal to the last element, push it to the end
+        if (commitments.length == 0 || compareCommitments(newCommitment, commitments[commitments.length - 1]) >= 0) {
+            commitments.push(newCommitment);
+            return;
+        }
+
+        // Binary search to find the index to insert newCommitment
+        uint256 left = 0;
+        uint256 right = commitments.length - 1;
+        uint256 mid = 0;
+
+        while (left <= right) {
+            mid = (left + right) / 2;
+            int256 comparison = compareCommitments(newCommitment, commitments[mid]);
+            if (comparison < 0) {
+                right = mid - 1;
+            } else if (comparison > 0) {
+                left = mid + 1;
+                mid = left;
+            }
+            else {
+                break;
+            }
+        }
+
+        // Shift elements to the right to make space for the new bid
+        commitments.push(commitments[commitments.length - 1]); // Expand the array by one
+        for (uint256 i = commitments.length - 2; i > mid; i--) {
+            commitments[i] = commitments[i - 1];
+        }
+        commitments[mid] = newCommitment; // Insert the new bid
+    }
+
+    function compareCommitments(Commitment memory commitment1, Commitment storage commitment2) private view returns (int256) {
+        if (commitment1.timeCommitted < commitment2.timeCommitted) {
+            return -1;
+        } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
+            return 1;
+        } else {
+            // If timeCommitted are equal, compare based on timeBidded
+            if (commitment1.timeBidded < commitment2.timeBidded) {
+                return -1;
+            } else if (commitment1.timeBidded > commitment2.timeBidded) {
+                return 1;
+            } else {
+                // If timeCommitted and timeBidded are equal, the commitments are equal
+                return 0;
+            }
         }
     }
 
@@ -202,6 +257,10 @@ contract DutchAuction is Ownable {
             return 0;
         }
         return initialTokenSupply - totalWeiCommitted / _currentPrice;
+    }
+
+    function getTotalWeiCommitted(uint256 blockTimestamp) view private returns(uint256) {
+        
     }
 
     function getPrice() view public returns (uint256) {
