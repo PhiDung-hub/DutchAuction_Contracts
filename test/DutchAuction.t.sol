@@ -112,5 +112,43 @@ contract DutchAuctionTest is Test {
         assertEq(block.timestamp, dutchAuction.actualEndTime());
     }
 
+    //Test for getCurrentTokenSupply function
+    function test_GetCurrentTokenSupply() public {
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 100000);
+        uint256 bidValue = 50000;
+        dutchAuction.bid{value: bidValue}();
+        uint256 currentTokenSupply = dutchAuction.getCurrentTokenSupply();
+        uint256 initialSupply = 100000;
+        uint256 price = dutchAuction.getCurrentPrice();
+        uint256 calculatedCurrentTokenSupply = initialSupply - (bidValue / price);
+
+        assertEq(currentTokenSupply, calculatedCurrentTokenSupply);
+    }
+
+
+    //Test for no settle auction if there's no auction happening
+    function test_clearAuction_WhenTheresNoAuction() public {
+        vm.expectRevert("No auction has started.");
+        dutchAuction.clearAuction();
+    }
+
+    //Test for settle Auction when auction is still in progress
+    function test_settleAuction_AuctionInProgress() public {
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 100000);
+        vm.expectRevert("Auction has not ended.");
+        dutchAuction.clearAuction();
+    }
+
+    //Test for usability of isAuctioning function
+    function test_IsAuctioning() public {
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 100000);
+        bool success = dutchAuction.isAuctioning();
+        assertTrue(success);
+
+        dutchAuction.bid{value: 1 * 10 ** 12}();
+        bool fail = dutchAuction.isAuctioning();
+        assertTrue(!fail);
+    }
+
     receive() external payable {}
 }
