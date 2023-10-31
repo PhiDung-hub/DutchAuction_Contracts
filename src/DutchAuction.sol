@@ -21,9 +21,11 @@ contract DutchAuction is Ownable {
     uint256 public actualEndTime;
 
     bool public auctionIsStarted;
+    bool public auctionIsSettled;
 
     uint256 public bidderPercentageLimit;
     uint256 public maxWeiPerBidder;
+
     struct Commitment {
         address bidder;
         uint256 amount;
@@ -32,10 +34,17 @@ contract DutchAuction is Ownable {
     }
     Commitment[] private commitments;
     mapping(address => uint256) private bidderToWei;
+    address[] bidders;
+    mapping(address => uint256) private successfulBidderToTokens;
+    address[] successfulBidders;
+    mapping(address => uint256) private failedBidderToRefund;
+    address[] failedBidders;
+    uint256 private toBurn;
 
 
     constructor() Ownable(msg.sender) {
         auctionIsStarted = false;
+        auctionIsSettled = false;
     }
 
     function startAuction(TulipToken _token,
@@ -65,6 +74,7 @@ contract DutchAuction is Ownable {
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
+        auctionIsSettled = false;
 
         bidderPercentageLimit = _bidderPercentageLimit;
         maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
@@ -87,14 +97,17 @@ contract DutchAuction is Ownable {
         bidAtTimestamp(msg.sender, msg.value, timeCommitted);
     }
 
-    // Bidder commits ether
+    // Bidder commits ether at a particular time
     function bidAtTimestamp(address _bidder, uint256 _amount, uint256 _timeCommitted) internal {
         uint256 committedAmount = validateBid(_bidder, _amount);
 
         // Store the commitments (bidder, amount, timeCommitted, timeBidded), and the total commitment per bidder
         Commitment memory newCommitment = Commitment(_bidder, committedAmount, _timeCommitted, block.timestamp);
         insertSorted(newCommitment);
-        bidderToWei[_bidder] = bidderToWei[_bidder] + committedAmount;
+        if (bidderToWei[_bidder] == 0) {
+            bidders.push(_bidder);
+        }
+        bidderToWei[_bidder] += committedAmount;
 
         if (getCurrentTokenSupply() == 0) {
             actualEndTime = block.timestamp;
@@ -183,40 +196,104 @@ contract DutchAuction is Ownable {
         }
     }
 
-    // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens
-    function settleAuction() external onlyOwner {
+    // Tally tokens and refunds per bidder, and tally remaining tokens to burn
+    function settleAuction() internal {
         // Check if auction has started and ended
         require(auctionIsStarted, "No auction has started.");
         require(block.timestamp > expectedEndTime || getCurrentTokenSupply() == 0, "Auction has not ended.");
+        if (auctionIsSettled) {
+            return;
+        }
+
+        // Tally up tokens per successful bidder
+        uint256 numberOfCommitments = commitments.length;
+        uint256 i = 0;
+        uint256 totalNumTokensSold = 0;
+        while (i < numberOfCommitments && totalNumTokensSold < initialTokenSupply) {
+            uint256 numTokensSold = commitments[i].amount / clearingPrice;
+            // If the commitment exceeds initialTokenSupply, partially fulfill it and refund remaining
+            if (totalNumTokensSold + numTokensSold > initialTokenSupply) {
+                uint256 numTokensRefund = totalNumTokensSold + numTokensSold - initialTokenSupply;
+                numTokensSold = initialTokenSupply - totalNumTokensSold;
+                if (failedBidderToRefund[commitments[i].bidder] == 0) {
+                    failedBidders.push(commitments[i].bidder);
+                }
+                failedBidderToRefund[commitments[i].bidder] += (numTokensRefund * clearingPrice);
+            }
+            totalNumTokensSold += numTokensSold;
+            if (successfulBidderToTokens[commitments[i].bidder] == 0) {
+                successfulBidders.push(commitments[i].bidder);
+            }
+            successfulBidderToTokens[commitments[i].bidder] += numTokensSold;
+            i += 1;
+        }
+
+        // Tally up refund per unfulfilled bidder
+        if (i < numberOfCommitments && totalNumTokensSold == initialTokenSupply) {
+            for (uint256 j = i; j < numberOfCommitments; j++) {
+                if (failedBidderToRefund[commitments[j].bidder] == 0) {
+                    failedBidders.push(commitments[j].bidder);
+                }
+                failedBidderToRefund[commitments[j].bidder] += commitments[j].amount;
+            }
+        }
+
+        // Tally up the remaining tokens to burn
+        if (i >= numberOfCommitments && totalNumTokensSold < initialTokenSupply) {
+            toBurn = initialTokenSupply - totalNumTokensSold;
+        }
+
+        // Settled
+        auctionIsSettled = true;
+    }
+
+    // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens, and reset
+    function clearAuction() external onlyOwner {
+        if (!auctionIsSettled) {
+            settleAuction();
+        }
 
         // Distribute tokens to successful bidders
-        // If we got bidAtPrice function, need to sort commitments by price then priority
-        uint256 numberOfCommitments = commitments.length;
-        for (uint256 i = 0; i < numberOfCommitments - 1; i++) {
-            token.transfer(commitments[i].bidder, commitments[i].amount / clearingPrice);
-        }
-
-        uint256 totalWeiCommitted = getCurrentTotalWeiCommitted();
-        uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
-        if (totalNumberOfTokensCommitted >= initialTokenSupply){
-            uint256 unsatisfiedCommitmentAmount = totalWeiCommitted - initialTokenSupply * clearingPrice;
-            uint256 satisfiedCommitmentAmount = commitments[numberOfCommitments - 1].amount - unsatisfiedCommitmentAmount;
-
-            // Refund the unsatisfied commitment amount
-            if (unsatisfiedCommitmentAmount > 0){
-                refund(commitments[numberOfCommitments - 1].bidder, unsatisfiedCommitmentAmount);
+        for (uint256 i = 0; i < successfulBidders.length; i++) {
+            address bidder = successfulBidders[i];
+            if (successfulBidderToTokens[bidder] > 0) {
+                token.transfer(bidder, successfulBidderToTokens[bidder]);
+                delete successfulBidderToTokens[bidder];
             }
+        }
+        delete successfulBidders;
 
-            // Transfer the satisfied number of tokens
-            token.transfer(commitments[numberOfCommitments - 1].bidder, satisfiedCommitmentAmount / clearingPrice);
+        // Refund failed bidders
+        for (uint256 i = 0; i < failedBidders.length; i++) {
+            address bidder = failedBidders[i];
+            if (failedBidderToRefund[bidder] > 0) {
+                refund(bidder, failedBidderToRefund[bidder]);
+                delete failedBidderToRefund[bidder];
+            }
         }
-        else {
-            // Burn the remaining tokens
-            token.burn(initialTokenSupply - totalNumberOfTokensCommitted);
+        delete failedBidders;
+
+        // Burn the remaining tokens
+        if (toBurn > 0) {
+            token.burn(toBurn);
         }
+        toBurn = 0;
+
+        // Reset
+        resetTracking();
 
         // Close the auction
         auctionIsStarted = false;
+    }
+
+    function resetTracking() internal {
+        delete commitments;
+
+        for (uint256 i = 0; i < bidders.length; i++) {
+            address bidder = bidders[i];
+            delete bidderToWei[bidder];
+        }
+        delete bidders;
     }
 
     function withdraw() external {
@@ -224,10 +301,17 @@ contract DutchAuction is Ownable {
         require(auctionIsStarted, "No auction has started.");
         require(block.timestamp > expectedEndTime + 10 * 60 || 
         (getCurrentTokenSupply() == 0 && block.timestamp > actualEndTime + 10 * 60 ), 
-        "Auction has not ended.");
+        "Auction has not ended for at least 10 minutes.");
 
-        // Todo
-        // token.transfer(msg.sender, winningAmount);
+        // Settle the auction if haven't
+        if (!auctionIsSettled) {
+            settleAuction();
+        }
+
+        uint256 tokensWon = successfulBidderToTokens[msg.sender];
+        require(tokensWon > 0, "No token to withdraw.");
+        delete successfulBidderToTokens[msg.sender];
+        token.transfer(msg.sender, tokensWon);
     }
 
     function refund(address _to, uint256 amount) internal {

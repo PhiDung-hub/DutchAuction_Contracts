@@ -51,6 +51,7 @@ contract DutchAuctionTest is Test {
         assertEq(block.timestamp + durationInMinutes * 60, dutchAuction.expectedEndTime());
         assertEq(dutchAuction.actualEndTime(), dutchAuction.expectedEndTime());
         assertTrue(dutchAuction.auctionIsStarted());
+        assertFalse(dutchAuction.auctionIsSettled());
         assertEq(bidderPercentageLimit, dutchAuction.bidderPercentageLimit());
         assertEq(initialTokenSupply * bidderPercentageLimit / 100 * reservePrice, dutchAuction.maxWeiPerBidder());
     }
