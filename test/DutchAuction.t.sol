@@ -78,7 +78,7 @@ contract DutchAuctionTest is Test {
 
     function test_Bid_RevertWhen_NoAuctionIsHappeningBecauseSoldOut() public {
         startValidDutchAuction();
-        dutchAuction.bid{value:100000 * 100000}();
+        dutchAuction.bid{value:1 * 10 ** 12}();
         vm.expectRevert("No auction happening at the moment. Please wait for the next auction.");
         dutchAuction.bid{value:1}();
     }
@@ -114,8 +114,8 @@ contract DutchAuctionTest is Test {
 
     //Test for getCurrentTokenSupply function
     function test_GetCurrentTokenSupply() public {
-        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 100000);
-        uint256 bidValue = 50000;
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
+        uint256 bidValue = 5000;
         dutchAuction.bid{value: bidValue}();
         uint256 currentTokenSupply = dutchAuction.getCurrentTokenSupply();
         uint256 initialSupply = 100000;
@@ -134,7 +134,7 @@ contract DutchAuctionTest is Test {
 
     //Test for settle Auction when auction is still in progress
     function test_settleAuction_AuctionInProgress() public {
-        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 100000);
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
         vm.expectRevert("Auction has not ended.");
         dutchAuction.clearAuction();
     }
@@ -148,6 +148,57 @@ contract DutchAuctionTest is Test {
         dutchAuction.bid{value: 1 * 10 ** 12}();
         bool fail = dutchAuction.isAuctioning();
         assertTrue(!fail);
+    }
+
+    //Test getBlockTimestampAtPrice
+    function test_getBlockTimestampAtPrice() public {
+        uint256 startingprice = 100000;
+        uint256 reserveprice = 10000;
+        uint256 timetaken = 20;
+        dutchAuction.startAuction(tulipToken, 100000, startingprice, reserveprice, timetaken, 100);
+
+        //Price is in the range
+        uint256 correctprice = 91000;
+        uint256 blocktimestamp = dutchAuction.getBlockTimestampAtPrice(correctprice);
+        uint256 calculatedblocktimestamp = dutchAuction.startTime() + (startingprice - correctprice) / dutchAuction.discountRate() * 60;
+        assertEq(blocktimestamp, calculatedblocktimestamp);
+
+        //Price is not in range
+        uint256 wrongprice = 90000;
+        vm.expectRevert("Price must be in the appropriate increment.");
+        dutchAuction.getBlockTimestampAtPrice(wrongprice);
+
+        //Price is under range
+        uint256 underprice = 1000;
+        vm.expectRevert("Price not within range.");
+        dutchAuction.getBlockTimestampAtPrice(underprice);
+
+        //Price is over range
+        uint256 overprice = 110000;
+        vm.expectRevert("Price not within range.");
+        dutchAuction.getBlockTimestampAtPrice(underprice);
+    }
+
+    //Test getCurrentPrice function
+    function test_getCurrentPrice() public {
+        uint256 startingprice = 100000;
+        uint256 reserveprice = 10000;
+        uint256 timetaken = 20;
+        dutchAuction.startAuction(tulipToken, 100000, startingprice, reserveprice, timetaken, 100);
+
+        uint256 originalprice = dutchAuction.getCurrentPrice();
+        assertEq(originalprice, startingprice);
+
+        vm.warp(block.timestamp + 60);
+
+        uint256 calculatedcurrentprice = startingprice - dutchAuction.discountRate() * (block.timestamp - dutchAuction.startTime()) / 60;
+        uint256 currentprice = dutchAuction.getCurrentPrice();
+        assertEq(currentprice, calculatedcurrentprice);
+
+        vm.warp(block.timestamp + 21 * 60);
+
+        uint256 finalprice = dutchAuction.getCurrentPrice();
+        assertEq(finalprice, reserveprice);
     }
 
     receive() external payable {}

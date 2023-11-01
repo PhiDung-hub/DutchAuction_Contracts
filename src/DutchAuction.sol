@@ -362,8 +362,8 @@ contract DutchAuction is Ownable {
     }
     
     function getBlockTimestampAtPrice(uint256 price) view public returns (uint256) {
-        require((startingPrice - price) % discountRate == 0, "Price must be in the appropriate increment.");
         require(price >= reservePrice && price <= startingPrice, "Price not within range.");
+        require((startingPrice - price) % discountRate == 0, "Price must be in the appropriate increment.");
         return startTime + (startingPrice - price) / discountRate * 60;
     }
 
