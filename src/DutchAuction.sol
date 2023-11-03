@@ -284,6 +284,7 @@ contract DutchAuction is Ownable {
 
         // Close the auction
         auctionIsStarted = false;
+        auctionIsSettled = false;
     }
 
     function resetTracking() internal {
