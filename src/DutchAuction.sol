@@ -47,7 +47,7 @@ contract DutchAuction is Ownable {
         auctionIsSettled = false;
     }
 
-    function startAuction(TulipToken _token,
+    function startAuction(address _tokenAddress,
     uint256 _initialTokenSupply,
     uint256 _startingPrice,
     uint256 _reservePrice,
@@ -57,9 +57,9 @@ contract DutchAuction is Ownable {
         // Check if there's another Dutch auction happening
         require(!auctionIsStarted, "Another Dutch auction is happening. Please wait...");
 
-        token = _token;
+        token = TulipToken(_tokenAddress);
 
-        require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
+        require(token.totalSupply() + _initialTokenSupply <= token.maxSupply(), 
         "The number of tokens minted exceeds the maximum possible supply!");
         initialTokenSupply = _initialTokenSupply;
         
@@ -80,7 +80,7 @@ contract DutchAuction is Ownable {
         maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
 
         // Minting the initial token supply to the DutchAuction contract
-        _token.operatorMint(initialTokenSupply);
+        token.operatorMint(initialTokenSupply);
     }
 
     // Bidder commits ether
