@@ -46,7 +46,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         auctionIsSettled = false;
     }
 
-    function startAuction(TulipToken _token,
+    function startAuction(address _tokenAddress,
     uint256 _initialTokenSupply,
     uint256 _startingPrice,
     uint256 _reservePrice,
@@ -58,7 +58,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsStarted();
         }
 
-        token = _token;
+        token = TulipToken(_tokenAddress);
 
         // @Phil: already checked at operatorMint
         // require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
