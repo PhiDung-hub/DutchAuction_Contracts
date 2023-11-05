@@ -8,7 +8,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IAuctionableToken} from "src/interfaces/IAuctionableToken.sol";
 import {MintLimitExceeded} from "src/lib/Errors.sol";
 
-contract TulipToken is IAuctionableToken, ERC20, ERC20Burnable, Ownable {
+contract TulipToken is IAuctionableToken, ERC20Burnable, Ownable {
     uint256 public immutable maxSupply;
     address public operator;
 
