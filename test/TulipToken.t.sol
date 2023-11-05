@@ -38,7 +38,8 @@ contract TulipTokenTest is Test {
         vm.prank(operatorAddress);
         token.operatorMint(300000);
 
-        vm.expectRevert("Minting the specified amount will cause number of tokens to exceed its max supply.");
+        bytes4 errorSelector = bytes4(keccak256("MintLimitExceeded(uint256,uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector, 800000, 700000));
         vm.prank(operatorAddress);
         token.operatorMint(800000);
     }

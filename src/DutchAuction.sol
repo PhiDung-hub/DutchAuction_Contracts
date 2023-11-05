@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {TulipToken} from "./TulipToken.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract DutchAuction is Ownable {
+import {TulipToken} from "./TulipToken.sol";
+import "src/lib/Errors.sol";
+import {ReentrancyGuard} from "src/lib/ReentrancyGuard.sol";
+import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
+import {Commitment} from "src/lib/Structs.sol";
+
+contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     TulipToken public token;
 
     uint256 public initialTokenSupply;
@@ -26,12 +31,6 @@ contract DutchAuction is Ownable {
     uint256 public bidderPercentageLimit;
     uint256 public maxWeiPerBidder;
 
-    struct Commitment {
-        address bidder;
-        uint256 amount;
-        uint256 timeCommitted;
-        uint256 timeBidded;
-    }
     Commitment[] private commitments;
     mapping(address => uint256) private bidderToWei;
     address[] bidders;
@@ -55,13 +54,19 @@ contract DutchAuction is Ownable {
     uint256 _bidderPercentageLimit) external onlyOwner
     {
         // Check if there's another Dutch auction happening
-        require(!auctionIsStarted, "Another Dutch auction is happening. Please wait...");
+        if (isAuctioning()) {
+          revert AuctionIsStarted();
+        }
 
         token = _token;
 
-        require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
-        "The number of tokens minted exceeds the maximum possible supply!");
+        // @Phil: already checked at operatorMint
+        // require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
+        // "The number of tokens minted exceeds the maximum possible supply!");
+
         initialTokenSupply = _initialTokenSupply;
+        // Minting the initial token supply to the DutchAuction contract
+        _token.operatorMint(initialTokenSupply);
         
         startTime = block.timestamp;
         duration = _duration;
@@ -79,31 +84,42 @@ contract DutchAuction is Ownable {
         bidderPercentageLimit = _bidderPercentageLimit;
         maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
 
-        // Minting the initial token supply to the DutchAuction contract
-        _token.operatorMint(initialTokenSupply);
+        emit StartAuction(
+            address(_token), 
+            _initialTokenSupply, 
+            _startingPrice, 
+            _reservePrice, 
+            _duration, 
+            _bidderPercentageLimit
+        );
     }
 
     // Bidder commits ether
     function bid() external payable {
-        bidAtTimestamp(msg.sender, msg.value, block.timestamp);
+        _bidAtTimestamp(msg.sender, msg.value, block.timestamp);
+
+        emit Bid(msg.sender, msg.value);
     }
 
-    function bidAtPrice(uint256 desiredPrice) external payable {
-        require(desiredPrice <= getCurrentPrice(), 
-        string(abi.encodePacked("Sorry, you have missed the chance to bid at ", 
-        Strings.toString(desiredPrice), ".")));
+    function bidAtPrice(uint256 targetPrice) external payable {
+        if (targetPrice > getCurrentPrice()) {
+            revert PriceTooHigh();
+        }
 
-        uint256 timeCommitted = getBlockTimestampAtPrice(desiredPrice);
-        bidAtTimestamp(msg.sender, msg.value, timeCommitted);
+        uint256 timeCommitted = getBlockTimestampAtPrice(targetPrice);
+        _bidAtTimestamp(msg.sender, msg.value, timeCommitted);
+
+        emit BidLimitOrder(msg.sender, msg.value, targetPrice, block.timestamp);
     }
 
+    // @Phil: this function is vulnerable to re-entrancy attack, added `nonReentrant` fix
     // Bidder commits ether at a particular time
-    function bidAtTimestamp(address _bidder, uint256 _amount, uint256 _timeCommitted) internal {
-        uint256 committedAmount = validateBid(_bidder, _amount);
+    function _bidAtTimestamp(address _bidder, uint256 _amount, uint256 _timeCommitted) internal nonReentrant {
+        uint256 committedAmount = _validateBid(_bidder, _amount);
 
         // Store the commitments (bidder, amount, timeCommitted, timeBidded), and the total commitment per bidder
         Commitment memory newCommitment = Commitment(_bidder, committedAmount, _timeCommitted, block.timestamp);
-        insertSorted(newCommitment);
+        _insertSorted(newCommitment);
         if (bidderToWei[_bidder] == 0) {
             bidders.push(_bidder);
         }
@@ -112,31 +128,38 @@ contract DutchAuction is Ownable {
         if (getCurrentTokenSupply() == 0) {
             actualEndTime = block.timestamp;
             clearingPrice = getCurrentPrice();
+            emit SoldOut(clearingPrice);
         }
     }
 
-    function validateBid(address bidder, uint256 committedAmount) internal returns (uint256 actualCommittedAmount) {
-        require(committedAmount > 0, "No amount of Wei has been committed.");
+    function _validateBid(address bidder, uint256 committedAmount) internal returns (uint256 actualCommittedAmount) {
+        if (!isAuctioning()) {
+            revert AuctionIsInactive();
+        }
 
-        // Can only bid if the auction is still happening, else, refund
-        require(isAuctioning(), "No auction happening at the moment. Please wait for the next auction.");
+        if (committedAmount == 0) {
+            revert ZeroCommitted();
+        }
 
         // A bidder's total commitment must be smaller than maxWeiPerBidder.
-        require(bidderToWei[bidder] < maxWeiPerBidder, "Already reach the maximum total Wei committed.");
+        if (bidderToWei[bidder] >= maxWeiPerBidder) {
+            revert BidLimitReached();
+        }
+
         // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
         uint256 maxComAmt = maxWeiPerBidder - bidderToWei[bidder];
         if (committedAmount > maxComAmt) {
             uint256 refundAmt = committedAmount - maxComAmt;
             committedAmount = maxComAmt;
-            refund(msg.sender, refundAmt);
+            _refund(msg.sender, refundAmt);
         }
 
         return committedAmount;
     }
 
-    function insertSorted(Commitment memory newCommitment) internal {
+    function _insertSorted(Commitment memory newCommitment) internal {
         // Binary search to find the index to insert newCommitment
-        uint256 indexToInsert = binarySearchCommitments(newCommitment, compareCommitmentsByTimeCommAndBid);
+        uint256 indexToInsert = _binarySearchCommitments(newCommitment, _compareCommitmentsByTimeCommAndBid);
         if (commitments.length == indexToInsert) { // insert after the last element
             commitments.push(newCommitment);
             return;
@@ -151,9 +174,10 @@ contract DutchAuction is Ownable {
     }
 
     // Binary search to find the index to insert newCommitment
-    function binarySearchCommitments(Commitment memory newCommitment, 
-    function(Commitment memory, Commitment storage) internal view returns(int256) comparator)
-    internal view returns(uint256) {
+    function _binarySearchCommitments(
+        Commitment memory newCommitment, 
+        function(Commitment memory, Commitment storage) internal view returns(int256) comparator
+    ) internal view returns(uint256) {
         // If no commitment, or if newCommitment is larger than or equal to the last element
         // Index to insert is commitments.length
         if (commitments.length == 0 || comparator(newCommitment, commitments[commitments.length - 1]) >= 0) {
@@ -178,7 +202,7 @@ contract DutchAuction is Ownable {
     }
 
     // Compare commitments by timeCommitted and timeBidded
-    function compareCommitmentsByTimeCommAndBid(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
+    function _compareCommitmentsByTimeCommAndBid(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
         if (commitment1.timeCommitted < commitment2.timeCommitted) {
             return -1;
         } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
@@ -197,10 +221,17 @@ contract DutchAuction is Ownable {
     }
 
     // Tally tokens and refunds per bidder, and tally remaining tokens to burn
-    function settleAuction() internal {
+    function _settleAuction() internal {
         // Check if auction has started and ended
-        require(auctionIsStarted, "No auction has started.");
-        require(block.timestamp > expectedEndTime || getCurrentTokenSupply() == 0, "Auction has not ended.");
+        if (!auctionIsStarted) {
+          revert AuctionIsNotStarted();
+        }
+
+        if (block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0) {
+            revert AuctionIsNotEnded();
+        }
+
+        // @Phil: should revert.
         if (auctionIsSettled) {
             return;
         }
@@ -250,7 +281,7 @@ contract DutchAuction is Ownable {
     // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens, and reset
     function clearAuction() external onlyOwner {
         if (!auctionIsSettled) {
-            settleAuction();
+            _settleAuction();
         }
 
         // Distribute tokens to successful bidders
@@ -267,7 +298,7 @@ contract DutchAuction is Ownable {
         for (uint256 i = 0; i < failedBidders.length; i++) {
             address bidder = failedBidders[i];
             if (failedBidderToRefund[bidder] > 0) {
-                refund(bidder, failedBidderToRefund[bidder]);
+                _refund(bidder, failedBidderToRefund[bidder]);
                 delete failedBidderToRefund[bidder];
             }
         }
@@ -280,14 +311,16 @@ contract DutchAuction is Ownable {
         toBurn = 0;
 
         // Reset
-        resetTracking();
+        _resetTracking();
 
         // Close the auction
         auctionIsStarted = false;
         auctionIsSettled = false;
+
+        emit AuctionSettled();
     }
 
-    function resetTracking() internal {
+    function _resetTracking() internal {
         delete commitments;
 
         for (uint256 i = 0; i < bidders.length; i++) {
@@ -299,51 +332,58 @@ contract DutchAuction is Ownable {
 
     function withdraw() external {
         // Can only withdraw when auction has started and ended for at least 10 mins
-        require(auctionIsStarted, "No auction has started.");
-        require(block.timestamp > expectedEndTime + 10 * 60 || 
-        (getCurrentTokenSupply() == 0 && block.timestamp > actualEndTime + 10 * 60 ), 
-        "Auction has not ended for at least 10 minutes.");
+        if (!auctionIsStarted) {
+          revert AuctionIsNotStarted();
+        }
 
+        // @Phil: actualEndTime is enough to check, consider removing expectedEndTime.
+        if (block.timestamp < actualEndTime + 10 * 60) {
+          uint256 timeRemaining = actualEndTime + 10 * 60 - block.timestamp;
+          revert NotWithdrawableYet(timeRemaining);
+        }
+
+        // @Phil: This is really expensive for normal bidder, consider being done by operator only.
+        //
         // Settle the auction if haven't
         if (!auctionIsSettled) {
-            settleAuction();
+            _settleAuction();
         }
 
         uint256 tokensWon = successfulBidderToTokens[msg.sender];
         require(tokensWon > 0, "No token to withdraw.");
         delete successfulBidderToTokens[msg.sender];
         token.transfer(msg.sender, tokensWon);
+
+        emit Withdraw(msg.sender, tokensWon);
     }
 
-    function refund(address _to, uint256 amount) internal {
+    // Phil: no need to check amount=0 for internal function -> save gas.
+    function _refund(address _to, uint256 amount) internal {
+        require(_to != address(0), "Transfer to zero address");
         // Call returns a boolean value indicating success or failure.
-        require(amount > 0, "No amount to refund");
-        (bool sent, bytes memory data) = _to.call{value: amount}("");
-        require(sent, "Failed to refund Ether");
+        (bool sent, ) = payable(_to).call{ value: amount }("");
+        require(sent, "ETH transfer failed");
     }
 
     function isAuctioning() view public returns (bool) {
-        if (auctionIsStarted && block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0){
-            return true;
-        }
-        return false;
+        return auctionIsStarted && block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0;
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 soldNumOfToken = getCurrentTotalWeiCommitted() / getCurrentPrice();
+        uint256 soldNumOfToken = _getCurrentTotalWeiCommitted() / getCurrentPrice();
         if (soldNumOfToken >= initialTokenSupply){
             return 0;
         }
         return initialTokenSupply - soldNumOfToken;
     }
 
-    function getCurrentTotalWeiCommitted() view internal returns(uint256) {
-        return getTotalWeiCommitted(block.timestamp);
+    function _getCurrentTotalWeiCommitted() view internal returns(uint256) {
+        return _getTotalWeiCommitted(block.timestamp);
     }
 
-    function getTotalWeiCommitted(uint256 blockTimestamp) view internal returns(uint256) {
+    function _getTotalWeiCommitted(uint256 blockTimestamp) view internal returns(uint256) {
         Commitment memory newCommitment = Commitment(address(123), 0, blockTimestamp, blockTimestamp);
-        uint256 rightBound = binarySearchCommitments(newCommitment, compareCommitmentsByTimeComm);
+        uint256 rightBound = _binarySearchCommitments(newCommitment, _compareCommitmentsByTimeComm);
         uint256 totalWeiCommitted = 0;
         for (uint256 i = 0; i < rightBound; i++) {
             totalWeiCommitted += commitments[i].amount;
@@ -352,7 +392,7 @@ contract DutchAuction is Ownable {
     }
 
     // Compare commitments by timeCommitted
-    function compareCommitmentsByTimeComm(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
+    function _compareCommitmentsByTimeComm(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
         if (commitment1.timeCommitted < commitment2.timeCommitted) {
             return -1;
         } else if (commitment1.timeCommitted > commitment2.timeCommitted) {

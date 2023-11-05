@@ -20,12 +20,14 @@ contract DutchAuctionTest is Test {
 
     function test_StartAuction_RevertWhen_AnotherAuctionIsHappening() public {
         dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
-        vm.expectRevert("Another Dutch auction is happening. Please wait...");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsStarted()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
     }
 
     function test_StartAuction_RevertWhen_ExceedMaxTokenSupply() public {
-        vm.expectRevert("The number of tokens minted exceeds the maximum possible supply!");
+        bytes4 errorSelector = bytes4(keccak256("MintLimitExceeded(uint256,uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector, 1000001, 1000000));
         dutchAuction.startAuction(tulipToken, 1000001, 100, 20, 20, 10);
     }
 
@@ -67,26 +69,30 @@ contract DutchAuctionTest is Test {
 
     function test_Bid_RevertWhen_NoWeiIsCommitted() public {
         startValidDutchAuction();
-        vm.expectRevert("No amount of Wei has been committed.");
+        bytes4 errorSelector = bytes4(keccak256("ZeroCommitted()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.bid{value:0}();
     }
 
     function test_Bid_RevertWhen_NoAuctionIsHappening() public {
-        vm.expectRevert("No auction happening at the moment. Please wait for the next auction.");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsInactive()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.bid{value:50000}();
     }
 
     function test_Bid_RevertWhen_NoAuctionIsHappeningBecauseSoldOut() public {
         startValidDutchAuction();
         dutchAuction.bid{value:1 * 10 ** 12}();
-        vm.expectRevert("No auction happening at the moment. Please wait for the next auction.");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsInactive()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.bid{value:1}();
     }
 
     function test_Bid_RevertWhen_CurrentTotalCommitmentReachesMax() public {
         dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
         dutchAuction.bid{value:10000 * 10000}();
-        vm.expectRevert("Already reach the maximum total Wei committed.");
+        bytes4 errorSelector = bytes4(keccak256("BidLimitReached()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.bid{value:1}();
     }
 
@@ -113,13 +119,15 @@ contract DutchAuctionTest is Test {
     }
 
     function test_clearAuction_RevertWhen_TheresNoAuction() public {
-        vm.expectRevert("No auction has started.");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsNotStarted()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.clearAuction();
     }
 
     function test_clearAuction_RevertWhen_AuctionInProgress() public {
         dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
-        vm.expectRevert("Auction has not ended.");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsNotEnded()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.clearAuction();
     }
 
@@ -127,7 +135,8 @@ contract DutchAuctionTest is Test {
         dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 100000);
         dutchAuction.bid{value: 1 * 10 ** 12}();
         dutchAuction.clearAuction();
-        vm.expectRevert("No auction has started.");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsNotStarted()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.clearAuction();
     }
 
@@ -138,20 +147,23 @@ contract DutchAuctionTest is Test {
     }
 
     function test_withdraw_RevertWhen_NoAuction() public {
-        vm.expectRevert("No auction has started.");
+        bytes4 errorSelector = bytes4(keccak256("AuctionIsNotStarted()"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.withdraw();
     }
 
     function test_withdraw_RevertWhen_AuctionInProgress() public {
         startValidDutchAuction();
-        vm.expectRevert("Auction has not ended for at least 10 minutes.");
+        bytes4 errorSelector = bytes4(keccak256("NotWithdrawableYet(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector, 30 * 60));
         dutchAuction.withdraw();
     }
 
     function test_withdraw_RevertWhen_Not10MinsYetFromAuctionTimeEnded() public {
         startValidDutchAuction();
         vm.warp(block.timestamp + 21 * 60);
-        vm.expectRevert("Auction has not ended for at least 10 minutes.");
+        bytes4 errorSelector = bytes4(keccak256("NotWithdrawableYet(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector, 9 * 60));
         dutchAuction.withdraw();
     }
 
@@ -159,7 +171,9 @@ contract DutchAuctionTest is Test {
     function test_withdraw_RevertWhen_Not10MinsYetFromAuctionSoldOut() public {
         startValidDutchAuction();
         dutchAuction.bid{value: 1 * 10 ** 12}();
-        vm.expectRevert("Auction has not ended for at least 10 minutes.");
+        vm.warp(block.timestamp + 9 * 60);
+        bytes4 errorSelector = bytes4(keccak256("NotWithdrawableYet(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector, 1 * 60));
         dutchAuction.withdraw();
     }
 
@@ -237,7 +251,7 @@ contract DutchAuctionTest is Test {
         uint256 bidValue = initialSupply * 100000;
         dutchAuction.bid{value: bidValue}();
         
-        uint256 price = dutchAuction.getCurrentPrice();
+        assertEq(100000, dutchAuction.getCurrentPrice());
 
         assertEq(0, dutchAuction.getCurrentTokenSupply());
     }
