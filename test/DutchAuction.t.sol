@@ -236,8 +236,6 @@ contract DutchAuctionTest is Test {
 
         uint256 bidValue = initialSupply * 100000;
         dutchAuction.bid{value: bidValue}();
-        
-        uint256 price = dutchAuction.getCurrentPrice();
 
         assertEq(0, dutchAuction.getCurrentTokenSupply());
     }
