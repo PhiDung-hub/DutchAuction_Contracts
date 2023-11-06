@@ -26,24 +26,17 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     uint256 public actualEndTime;
 
     bool public auctionIsStarted;
-    bool public auctionIsSettled;
 
     uint256 public bidderPercentageLimit;
     uint256 public maxWeiPerBidder;
 
+    uint256 private totalWeiCommitted;
     Commitment[] private commitments;
     mapping(address => uint256) private bidderToWei;
     address[] bidders;
-    mapping(address => uint256) private successfulBidderToTokens;
-    address[] successfulBidders;
-    mapping(address => uint256) private failedBidderToRefund;
-    address[] failedBidders;
-    uint256 private toBurn;
-
 
     constructor() Ownable(msg.sender) {
         auctionIsStarted = false;
-        auctionIsSettled = false;
     }
 
     function startAuction(address _tokenAddress,
@@ -66,7 +59,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         initialTokenSupply = _initialTokenSupply;
         // Minting the initial token supply to the DutchAuction contract
-        _token.operatorMint(initialTokenSupply);
+        token.operatorMint(initialTokenSupply);
         
         startTime = block.timestamp;
         duration = _duration;
@@ -79,13 +72,12 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
-        auctionIsSettled = false;
 
         bidderPercentageLimit = _bidderPercentageLimit;
         maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
 
         emit StartAuction(
-            address(_token), 
+            address(token), 
             _initialTokenSupply, 
             _startingPrice, 
             _reservePrice, 
@@ -94,42 +86,37 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         );
     }
 
+    // this function is vulnerable to re-entrancy attack, added `nonReentrant` fix
     // Bidder commits ether
-    function bid() external payable {
-        _bidAtTimestamp(msg.sender, msg.value, block.timestamp);
+    function bid() external payable nonReentrant {
+        uint256 committedAmount = _validateBid(msg.sender, msg.value);
 
-        emit Bid(msg.sender, msg.value);
-    }
+        // If the bid causes totalNumberOfTokensCommitted to exceed initial token supply, need to do refund
+        uint256 currentPrice = getCurrentPrice();
+        if (totalWeiCommitted + committedAmount > initialTokenSupply * currentPrice) {
+            uint256 unsatisfiedCommitmentAmount = totalWeiCommitted + committedAmount - initialTokenSupply * currentPrice;
+            committedAmount -= unsatisfiedCommitmentAmount;
 
-    function bidAtPrice(uint256 targetPrice) external payable {
-        if (targetPrice > getCurrentPrice()) {
-            revert PriceTooHigh();
+            // Refund the unsatisfied commitment amount
+            _refund(msg.sender, unsatisfiedCommitmentAmount);
         }
 
-        uint256 timeCommitted = getBlockTimestampAtPrice(targetPrice);
-        _bidAtTimestamp(msg.sender, msg.value, timeCommitted);
-
-        emit BidLimitOrder(msg.sender, msg.value, targetPrice, block.timestamp);
-    }
-
-    // @Phil: this function is vulnerable to re-entrancy attack, added `nonReentrant` fix
-    // Bidder commits ether at a particular time
-    function _bidAtTimestamp(address _bidder, uint256 _amount, uint256 _timeCommitted) internal nonReentrant {
-        uint256 committedAmount = _validateBid(_bidder, _amount);
-
-        // Store the commitments (bidder, amount, timeCommitted, timeBidded), and the total commitment per bidder
-        Commitment memory newCommitment = Commitment(_bidder, committedAmount, _timeCommitted, block.timestamp);
-        _insertSorted(newCommitment);
-        if (bidderToWei[_bidder] == 0) {
-            bidders.push(_bidder);
+        // Store the commitments (bidder, amount), and the total commitment per bidder
+        Commitment memory newCommitment = Commitment(msg.sender, committedAmount);
+        commitments.push(newCommitment);
+        if (bidderToWei[msg.sender] == 0) {
+            bidders.push(msg.sender);
         }
-        bidderToWei[_bidder] += committedAmount;
+        bidderToWei[msg.sender] += committedAmount;
+        totalWeiCommitted += committedAmount;
 
         if (getCurrentTokenSupply() == 0) {
             actualEndTime = block.timestamp;
             clearingPrice = getCurrentPrice();
             emit SoldOut(clearingPrice);
         }
+
+        emit Bid(msg.sender, msg.value);
     }
 
     function _validateBid(address bidder, uint256 committedAmount) internal returns (uint256 actualCommittedAmount) {
@@ -157,71 +144,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         return committedAmount;
     }
 
-    function _insertSorted(Commitment memory newCommitment) internal {
-        // Binary search to find the index to insert newCommitment
-        uint256 indexToInsert = _binarySearchCommitments(newCommitment, _compareCommitmentsByTimeCommAndBid);
-        if (commitments.length == indexToInsert) { // insert after the last element
-            commitments.push(newCommitment);
-            return;
-        }
-
-        // Shift elements to the right to make space for the new commitment
-        commitments.push(commitments[commitments.length - 1]); // Expand the array by one
-        for (uint256 i = commitments.length - 2; i > indexToInsert; i--) {
-            commitments[i] = commitments[i - 1];
-        }
-        commitments[indexToInsert] = newCommitment; // Insert the new commitment
-    }
-
-    // Binary search to find the index to insert newCommitment
-    function _binarySearchCommitments(
-        Commitment memory newCommitment, 
-        function(Commitment memory, Commitment storage) internal view returns(int256) comparator
-    ) internal view returns(uint256) {
-        // If no commitment, or if newCommitment is larger than or equal to the last element
-        // Index to insert is commitments.length
-        if (commitments.length == 0 || comparator(newCommitment, commitments[commitments.length - 1]) >= 0) {
-            return commitments.length;
-        }
-
-        uint256 left = 0;
-        uint256 right = commitments.length - 1;
-        uint256 mid = 0;
-
-        while (left <= right) {
-            mid = (left + right) / 2;
-            int256 comparison = comparator(newCommitment, commitments[mid]);
-            if (comparison < 0) {
-                right = mid - 1;
-            } else {
-                left = mid + 1;
-                mid = left;
-            }
-        }
-        return mid;
-    }
-
-    // Compare commitments by timeCommitted and timeBidded
-    function _compareCommitmentsByTimeCommAndBid(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
-        if (commitment1.timeCommitted < commitment2.timeCommitted) {
-            return -1;
-        } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
-            return 1;
-        } else {
-            // If timeCommitted are equal, compare based on timeBidded
-            if (commitment1.timeBidded < commitment2.timeBidded) {
-                return -1;
-            } else if (commitment1.timeBidded > commitment2.timeBidded) {
-                return 1;
-            } else {
-                // If timeCommitted and timeBidded are equal, the commitments are equal
-                return 0;
-            }
-        }
-    }
-
-    // Tally tokens and refunds per bidder, and tally remaining tokens to burn
-    function _settleAuction() internal {
+    function clearAuction() external onlyOwner {
         // Check if auction has started and ended
         if (!auctionIsStarted) {
           revert AuctionIsNotStarted();
@@ -231,102 +154,30 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
             revert AuctionIsNotEnded();
         }
 
-        // @Phil: should revert.
-        if (auctionIsSettled) {
-            return;
-        }
-
-        // Tally up tokens per successful bidder
-        uint256 numberOfCommitments = commitments.length;
-        uint256 i = 0;
-        uint256 totalNumTokensSold = 0;
-        while (i < numberOfCommitments && totalNumTokensSold < initialTokenSupply) {
-            uint256 numTokensSold = commitments[i].amount / clearingPrice;
-            // If the commitment exceeds initialTokenSupply, partially fulfill it and refund remaining
-            if (totalNumTokensSold + numTokensSold > initialTokenSupply) {
-                uint256 numTokensRefund = totalNumTokensSold + numTokensSold - initialTokenSupply;
-                numTokensSold = initialTokenSupply - totalNumTokensSold;
-                if (failedBidderToRefund[commitments[i].bidder] == 0) {
-                    failedBidders.push(commitments[i].bidder);
-                }
-                failedBidderToRefund[commitments[i].bidder] += (numTokensRefund * clearingPrice);
-            }
-            totalNumTokensSold += numTokensSold;
-            if (successfulBidderToTokens[commitments[i].bidder] == 0) {
-                successfulBidders.push(commitments[i].bidder);
-            }
-            successfulBidderToTokens[commitments[i].bidder] += numTokensSold;
-            i += 1;
-        }
-
-        // Tally up refund per unfulfilled bidder
-        if (i < numberOfCommitments && totalNumTokensSold == initialTokenSupply) {
-            for (uint256 j = i; j < numberOfCommitments; j++) {
-                if (failedBidderToRefund[commitments[j].bidder] == 0) {
-                    failedBidders.push(commitments[j].bidder);
-                }
-                failedBidderToRefund[commitments[j].bidder] += commitments[j].amount;
-            }
-        }
-
-        // Tally up the remaining tokens to burn
-        if (i >= numberOfCommitments && totalNumTokensSold < initialTokenSupply) {
-            toBurn = initialTokenSupply - totalNumTokensSold;
-        }
-
-        // Settled
-        auctionIsSettled = true;
-    }
-
-    // Distribute tokens, refund (partially) exceeding bid/burn remaining tokens, and reset
-    function clearAuction() external onlyOwner {
-        if (!auctionIsSettled) {
-            _settleAuction();
-        }
-
         // Distribute tokens to successful bidders
-        for (uint256 i = 0; i < successfulBidders.length; i++) {
-            address bidder = successfulBidders[i];
-            if (successfulBidderToTokens[bidder] > 0) {
-                token.transfer(bidder, successfulBidderToTokens[bidder]);
-                delete successfulBidderToTokens[bidder];
-            }
+        for (uint256 i = 0; i < bidders.length; i++) {
+            address bidder = bidders[i];
+            token.transfer(bidder, bidderToWei[bidder] / clearingPrice);
+            delete bidderToWei[bidder];
         }
-        delete successfulBidders;
 
-        // Refund failed bidders
-        for (uint256 i = 0; i < failedBidders.length; i++) {
-            address bidder = failedBidders[i];
-            if (failedBidderToRefund[bidder] > 0) {
-                _refund(bidder, failedBidderToRefund[bidder]);
-                delete failedBidderToRefund[bidder];
-            }
+        uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
+        if (totalNumberOfTokensCommitted < initialTokenSupply) {
+            // Burn the remaining tokens
+            token.burn(initialTokenSupply - totalNumberOfTokensCommitted);
         }
-        delete failedBidders;
-
-        // Burn the remaining tokens
-        if (toBurn > 0) {
-            token.burn(toBurn);
-        }
-        toBurn = 0;
 
         // Reset
         _resetTracking();
 
         // Close the auction
         auctionIsStarted = false;
-        auctionIsSettled = false;
 
         emit AuctionSettled();
     }
 
     function _resetTracking() internal {
         delete commitments;
-
-        for (uint256 i = 0; i < bidders.length; i++) {
-            address bidder = bidders[i];
-            delete bidderToWei[bidder];
-        }
         delete bidders;
     }
 
@@ -342,16 +193,9 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert NotWithdrawableYet(timeRemaining);
         }
 
-        // @Phil: This is really expensive for normal bidder, consider being done by operator only.
-        //
-        // Settle the auction if haven't
-        if (!auctionIsSettled) {
-            _settleAuction();
-        }
-
-        uint256 tokensWon = successfulBidderToTokens[msg.sender];
+        uint256 tokensWon = bidderToWei[msg.sender];
         require(tokensWon > 0, "No token to withdraw.");
-        delete successfulBidderToTokens[msg.sender];
+        delete bidderToWei[msg.sender];
         token.transfer(msg.sender, tokensWon);
 
         emit Withdraw(msg.sender, tokensWon);
@@ -370,42 +214,11 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 soldNumOfToken = _getCurrentTotalWeiCommitted() / getCurrentPrice();
+        uint256 soldNumOfToken = totalWeiCommitted / getCurrentPrice();
         if (soldNumOfToken >= initialTokenSupply){
             return 0;
         }
         return initialTokenSupply - soldNumOfToken;
-    }
-
-    function _getCurrentTotalWeiCommitted() view internal returns(uint256) {
-        return _getTotalWeiCommitted(block.timestamp);
-    }
-
-    function _getTotalWeiCommitted(uint256 blockTimestamp) view internal returns(uint256) {
-        Commitment memory newCommitment = Commitment(address(123), 0, blockTimestamp, blockTimestamp);
-        uint256 rightBound = _binarySearchCommitments(newCommitment, _compareCommitmentsByTimeComm);
-        uint256 totalWeiCommitted = 0;
-        for (uint256 i = 0; i < rightBound; i++) {
-            totalWeiCommitted += commitments[i].amount;
-        }
-        return totalWeiCommitted;
-    }
-
-    // Compare commitments by timeCommitted
-    function _compareCommitmentsByTimeComm(Commitment memory commitment1, Commitment storage commitment2) internal view returns (int256) {
-        if (commitment1.timeCommitted < commitment2.timeCommitted) {
-            return -1;
-        } else if (commitment1.timeCommitted > commitment2.timeCommitted) {
-            return 1;
-        } else {
-            return 0;
-        }
-    }
-    
-    function getBlockTimestampAtPrice(uint256 price) view public returns (uint256) {
-        require(price >= reservePrice && price <= startingPrice, "Price not within range.");
-        require((startingPrice - price) % discountRate == 0, "Price must be in the appropriate increment.");
-        return startTime + (startingPrice - price) / discountRate * 60;
     }
 
     function getCurrentPrice() view public returns (uint256) {

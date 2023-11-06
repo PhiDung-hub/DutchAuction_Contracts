@@ -18,13 +18,6 @@ interface IDutchAuction {
 
     event Bid(address bidder, uint256 amount);
 
-    event BidLimitOrder(
-        address bidder,
-        uint256 amount,
-        uint256 targetPrice,
-        uint256 bidTime
-    );
-
     event AuctionSettled();
 
     event Withdraw(address successfulBidder, uint256 amountWon);
@@ -35,7 +28,7 @@ interface IDutchAuction {
 
     /////// Main auction ///////
     function startAuction(
-        TulipToken _token,
+        address _token,
         uint256 _initialTokenSupply,
         uint256 _startingPrice,
         uint256 _reservePrice,
@@ -56,14 +49,9 @@ interface IDutchAuction {
     ///////// Biddings /////////
     function bid() external payable;
 
-    function bidAtPrice(uint256 desiredPrice) external payable;
-
     ////////////////////////////
 
     ///////// Pricing /////////
-    function getBlockTimestampAtPrice(
-        uint256 price
-    ) external view returns (uint256);
 
     function getCurrentPrice() external view returns (uint256);
 
