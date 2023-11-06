@@ -230,6 +230,12 @@ contract DutchAuction is Ownable {
 
         // Tally up refund per unfulfilled bidder
         if (i < numberOfCommitments && totalNumTokensSold == initialTokenSupply) {
+            // Get the actualEndTime and clearingPrice
+            if (i >= 1) {
+                actualEndTime = commitments[i - 1].timeCommitted;
+                clearingPrice = getPriceAtTime(actualEndTime);
+            }
+
             for (uint256 j = i; j < numberOfCommitments; j++) {
                 if (failedBidderToRefund[commitments[j].bidder] == 0) {
                     failedBidders.push(commitments[j].bidder);
@@ -366,6 +372,14 @@ contract DutchAuction is Ownable {
         require(price >= reservePrice && price <= startingPrice, "Price not within range.");
         require((startingPrice - price) % discountRate == 0, "Price must be in the appropriate increment.");
         return startTime + (startingPrice - price) / discountRate * 60;
+    }
+
+    function getPriceAtTime(uint256 time) view public returns (uint256) {
+        require(time >= startTime, "Time is before auction's start time.");
+        if (time > expectedEndTime) {
+            return reservePrice;
+        }
+        return startingPrice - discountRate * (time - startTime) / 60;
     }
 
     function getCurrentPrice() view public returns (uint256) {
