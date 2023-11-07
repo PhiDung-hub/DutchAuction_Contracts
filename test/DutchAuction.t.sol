@@ -51,10 +51,8 @@ contract DutchAuctionTest is Test {
         assertEq(reservePrice, dutchAuction.clearingPrice());
         assertEq(block.timestamp, dutchAuction.startTime());
         assertEq(durationInMinutes, dutchAuction.duration());
-        assertEq(block.timestamp + durationInMinutes * 60, dutchAuction.expectedEndTime());
-        assertEq(dutchAuction.actualEndTime(), dutchAuction.expectedEndTime());
+        assertEq(block.timestamp + durationInMinutes * 60, dutchAuction.endTime());
         assertTrue(dutchAuction.auctionIsStarted());
-        assertEq(bidderPercentageLimit, dutchAuction.bidderPercentageLimit());
         assertEq(initialTokenSupply * bidderPercentageLimit / 100 * reservePrice, dutchAuction.maxWeiPerBidder());
     }
 
@@ -115,7 +113,7 @@ contract DutchAuctionTest is Test {
         dutchAuction.bid{value:5 * 10 ** 9}();
         dutchAuction.bid{value:6 * 10 ** 9}();  // how to simulate this bid coming quite significantly later than the first bid?
         assertEq(dutchAuction.getCurrentPrice(), dutchAuction.clearingPrice());
-        assertEq(block.timestamp, dutchAuction.actualEndTime());
+        assertEq(block.timestamp, dutchAuction.endTime());
     }
 
     function test_clearAuction_RevertWhen_TheresNoAuction() public {

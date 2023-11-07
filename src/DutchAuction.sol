@@ -9,7 +9,6 @@ import "src/lib/Errors.sol";
 import {ReentrancyGuard} from "src/lib/ReentrancyGuard.sol";
 import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
 import {IAuctionableToken} from "src/interfaces/IAuctionableToken.sol";
-import {Commitment} from "src/lib/Structs.sol";
 
 contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     IAuctionableToken public token;
@@ -23,16 +22,13 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
     uint256 public startTime;
     uint256 public duration;
-    uint256 public expectedEndTime;
-    uint256 public actualEndTime;
+    uint256 public endTime;
 
     bool public auctionIsStarted;
 
-    uint256 public bidderPercentageLimit;
     uint256 public maxWeiPerBidder;
 
     uint256 private totalWeiCommitted;
-    Commitment[] private commitments;
     mapping(address => uint256) private bidderToWei;
     address[] bidders;
 
@@ -54,18 +50,13 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         token = _token;
 
-        // @Phil: already checked at operatorMint
-        // require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
-        // "The number of tokens minted exceeds the maximum possible supply!");
-
         initialTokenSupply = _initialTokenSupply;
         // Minting the initial token supply to the DutchAuction contract
         token.operatorMint(initialTokenSupply);
         
         startTime = block.timestamp;
         duration = _duration;
-        expectedEndTime = startTime + duration * 60;
-        actualEndTime = expectedEndTime;
+        endTime = startTime + duration * 60;
 
         startingPrice = _startingPrice;
         reservePrice = _reservePrice;
@@ -74,7 +65,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         auctionIsStarted = true;
 
-        bidderPercentageLimit = _bidderPercentageLimit;
         maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
 
         emit StartAuction(
@@ -94,6 +84,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         // If the bid causes totalNumberOfTokensCommitted to exceed initial token supply, need to do refund
         uint256 currentPrice = getCurrentPrice();
+
         if (totalWeiCommitted + committedAmount > initialTokenSupply * currentPrice) {
             uint256 unsatisfiedCommitmentAmount = totalWeiCommitted + committedAmount - initialTokenSupply * currentPrice;
             committedAmount -= unsatisfiedCommitmentAmount;
@@ -102,9 +93,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
             _refund(msg.sender, unsatisfiedCommitmentAmount);
         }
 
-        // Store the commitments (bidder, amount), and the total commitment per bidder
-        Commitment memory newCommitment = Commitment(msg.sender, committedAmount);
-        commitments.push(newCommitment);
         if (bidderToWei[msg.sender] == 0) {
             bidders.push(msg.sender);
         }
@@ -112,7 +100,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         totalWeiCommitted += committedAmount;
 
         if (getCurrentTokenSupply() == 0) {
-            actualEndTime = block.timestamp;
+            endTime = block.timestamp;
             clearingPrice = getCurrentPrice();
             emit SoldOut(clearingPrice);
         }
@@ -151,7 +139,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsNotStarted();
         }
 
-        if (block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0) {
+        if (block.timestamp <= endTime && getCurrentTokenSupply() > 0) {
             revert AuctionIsNotEnded();
         }
 
@@ -178,7 +166,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function _resetTracking() internal {
-        delete commitments;
         delete bidders;
     }
 
@@ -188,8 +175,8 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsNotStarted();
         }
 
-        if (block.timestamp < actualEndTime + 10 * 60) {
-          uint256 timeRemaining = actualEndTime + 10 * 60 - block.timestamp;
+        if (block.timestamp < endTime + 10 * 60) {
+          uint256 timeRemaining = endTime + 10 * 60 - block.timestamp;
           revert NotWithdrawableYet(timeRemaining);
         }
 
@@ -210,7 +197,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function isAuctioning() view public returns (bool) {
-        return auctionIsStarted && block.timestamp <= expectedEndTime && getCurrentTokenSupply() > 0;
+        return auctionIsStarted && block.timestamp <= endTime && getCurrentTokenSupply() > 0;
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
@@ -226,9 +213,9 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function getCurrentPrice() view public returns (uint256) {
-        if (block.timestamp > expectedEndTime) {
+        if (block.timestamp > startTime + duration * 60) {
             return reservePrice;
         }
-        return startingPrice - discountRate * (block.timestamp - startTime) / 60;
+        return startingPrice - discountRate * ((block.timestamp - startTime) / 60);
     }
 }
