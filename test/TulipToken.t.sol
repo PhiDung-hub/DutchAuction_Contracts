@@ -18,7 +18,7 @@ contract TulipTokenTest is Test {
 
     function test_Constructor() public {
         assertEq(token.maxSupply(), maxSupply);
-        assertEq(token.operator(), operatorAddress);
+        assertEq(token.owner(), operatorAddress);
     }
 
     function test_operatorMintAsOperator() public {

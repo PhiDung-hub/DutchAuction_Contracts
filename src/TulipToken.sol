@@ -10,7 +10,6 @@ import {MintLimitExceeded} from "src/lib/Errors.sol";
 
 contract TulipToken is IAuctionableToken, ERC20Burnable, Ownable {
     uint256 public immutable maxSupply;
-    address public operator;
 
     // by default, ERC20 uses a value of 18 for decimals
     constructor(
@@ -18,7 +17,6 @@ contract TulipToken is IAuctionableToken, ERC20Burnable, Ownable {
         address _operator
     ) ERC20("Tulip", "TL") Ownable(_operator) {
         maxSupply = _maxSupply;
-        operator = _operator; // DutchAuction contract
     }
 
     function operatorMint(uint256 amount) external onlyOwner {
@@ -26,7 +24,7 @@ contract TulipToken is IAuctionableToken, ERC20Burnable, Ownable {
         if (amount > _mintLimit) {
             revert MintLimitExceeded(amount, _mintLimit);
         }
-        _mint(operator, amount);
+        _mint(owner(), amount);
 
         emit OperatorMint(amount);
     }
