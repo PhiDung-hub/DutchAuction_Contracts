@@ -1,66 +1,62 @@
-## Foundry
+# Dutch Auction Demo
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
 
-Foundry consists of:
+## Features
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
++ **Reusable** [✅]: A single `DutchAuction` contract can initiate multiple auction from `IAuctionableToken` compliant tokens.
+  
++ **Composable** [✅]: Auction token and Auction contract are separated, each can be extended with arbitrary logic.
 
-## Documentation
++ **Resilience** [✅]: Contract is robust against re-entrancy attack. NOT PUBLICLY AUDITED YET, USE AT YOUR OWN RISK!
 
-https://book.getfoundry.sh/
++ **Gas Efficient** [✅]: Try running gas profile to see result (**@see** `Local Instruction / Run tasks / Test`)
 
-## Usage
+    + `bid()` consumes about _**100k gas**_.
 
-### Build
+    + `startAuction()` consumes about _**300k gas**_.
 
-```shell
-$ forge build
+    + `clearAuction()` consumes about _**23k gas / participant**_.
+
+
+
+## Repo structure
+
+...
+
+## Local Instruction
+
+### 1. Install foundry tool chains.
+
+Follow instructions at (https://book.getfoundry.sh/getting-started/installation)[https://book.getfoundry.sh/getting-started/installation]
+
+### 2. Run tasks
+
+#### Compile 
+
+```
+forge compile
 ```
 
-### Test
+=> Check `./out` folder.
 
-```shell
-$ forge test
+#### Test
+
+```
+forge test
 ```
 
-### Format
+With gas report 
 
-```shell
-$ forge fmt
+```
+forge test --gas-report
 ```
 
-### Gas Snapshots
+For specific contract
 
-```shell
-$ forge snapshot
+```
+forge test --mc <CONTRACT_TO_MATCH>
 ```
 
-### Anvil
+#### Run scripts
 
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+...
