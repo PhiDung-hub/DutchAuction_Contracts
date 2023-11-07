@@ -30,4 +30,8 @@ contract TulipToken is IAuctionableToken, ERC20Burnable, Ownable {
 
         emit OperatorMint(amount);
     }
+
+    function burn(uint256 value) public override (IAuctionableToken, ERC20Burnable) {
+        super.burn(value);
+    }
 }

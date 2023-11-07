@@ -28,7 +28,7 @@ interface IDutchAuction {
 
     /////// Main auction ///////
     function startAuction(
-        address _token,
+        IAuctionableToken _token,
         uint256 _initialTokenSupply,
         uint256 _startingPrice,
         uint256 _reservePrice,

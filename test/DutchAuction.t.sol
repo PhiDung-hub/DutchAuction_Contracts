@@ -4,16 +4,15 @@ pragma solidity ^0.8.13;
 import {Test} from "forge-std/Test.sol";
 import {DutchAuction} from "src/DutchAuction.sol";
 import {TulipToken} from "src/TulipToken.sol";
+import {IAuctionableToken} from "src/interfaces/IAuctionableToken.sol";
 
 contract DutchAuctionTest is Test {
     DutchAuction private dutchAuction;
     TulipToken private tulipToken;
-    address private tulipTokenAddress;
 
     function setUp() public {
         dutchAuction = new DutchAuction();
         tulipToken = new TulipToken(1000000, address(dutchAuction));
-        tulipTokenAddress = address(tulipToken);
     }
 
     function test_OwnerIsDeployer() public {
@@ -21,16 +20,16 @@ contract DutchAuctionTest is Test {
     }
 
     function test_StartAuction_RevertWhen_AnotherAuctionIsHappening() public {
-        dutchAuction.startAuction(tulipTokenAddress, 100000, 100, 20, 20, 10);
+        dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
         bytes4 errorSelector = bytes4(keccak256("AuctionIsStarted()"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector));
-        dutchAuction.startAuction(tulipTokenAddress, 100000, 100, 20, 20, 10);
+        dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
     }
 
     function test_StartAuction_RevertWhen_ExceedMaxTokenSupply() public {
         bytes4 errorSelector = bytes4(keccak256("MintLimitExceeded(uint256,uint256)"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector, 1000001, 1000000));
-        dutchAuction.startAuction(tulipTokenAddress, 1000001, 100, 20, 20, 10);
+        dutchAuction.startAuction(tulipToken, 1000001, 100, 20, 20, 10);
     }
 
     function test_StartAuction() public {
@@ -43,7 +42,7 @@ contract DutchAuctionTest is Test {
         vm.expectCall(
             address(tulipToken), abi.encodeCall(tulipToken.operatorMint, initialTokenSupply)
         );
-        dutchAuction.startAuction(tulipTokenAddress, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
+        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
         
         assertEq(initialTokenSupply, dutchAuction.initialTokenSupply());
         assertEq(startingPrice, dutchAuction.startingPrice());
@@ -65,7 +64,7 @@ contract DutchAuctionTest is Test {
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
         uint256 bidderPercentageLimit = 100000;
-        dutchAuction.startAuction(tulipTokenAddress, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
+        dutchAuction.startAuction(tulipToken, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
     }
 
     function test_Bid_RevertWhen_NoWeiIsCommitted() public {
@@ -90,7 +89,7 @@ contract DutchAuctionTest is Test {
     }
 
     function test_Bid_RevertWhen_CurrentTotalCommitmentReachesMax() public {
-        dutchAuction.startAuction(tulipTokenAddress, 100000, 100000, 10000, 20, 10);
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
         dutchAuction.bid{value:10000 * 10000}();
         bytes4 errorSelector = bytes4(keccak256("BidLimitReached()"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector));
@@ -98,7 +97,7 @@ contract DutchAuctionTest is Test {
     }
 
     function test_Bid_RefundBidAmountExceedingMax() public {
-        dutchAuction.startAuction(tulipTokenAddress, 100000, 100000, 10000, 20, 10);
+        dutchAuction.startAuction(tulipToken, 100000, 100000, 10000, 20, 10);
         vm.expectCall(
             address(this), 5, ""
         );
@@ -223,7 +222,7 @@ contract DutchAuctionTest is Test {
 
     function test_getCurrentTokenSupply() public {
         uint256 initialSupply = 100000;
-        dutchAuction.startAuction(tulipTokenAddress, initialSupply, 100000, 10000, 20, 100000);
+        dutchAuction.startAuction(tulipToken, initialSupply, 100000, 10000, 20, 100000);
 
         uint256 bidValue = 5000;
         dutchAuction.bid{value: bidValue}();
@@ -236,7 +235,7 @@ contract DutchAuctionTest is Test {
 
     function test_getCurrentTokenSupply_WhenSoldOut() public {
         uint256 initialSupply = 100000;
-        dutchAuction.startAuction(tulipTokenAddress, initialSupply, 100000, 10000, 20, 100000);
+        dutchAuction.startAuction(tulipToken, initialSupply, 100000, 10000, 20, 100000);
 
         uint256 bidValue = initialSupply * 100000;
         dutchAuction.bid{value: bidValue}();
@@ -277,7 +276,7 @@ contract DutchAuctionTest is Test {
     }
 
     function startValidDutchAuction1(uint256 _startingPrice, uint256 _reservePrice, uint256 _durationInMinutes) private {
-        dutchAuction.startAuction(tulipTokenAddress, 100000, _startingPrice, _reservePrice, _durationInMinutes, 100000);
+        dutchAuction.startAuction(tulipToken, 100000, _startingPrice, _reservePrice, _durationInMinutes, 100000);
     }
 
     receive() external payable {}

@@ -8,10 +8,11 @@ import {TulipToken} from "./TulipToken.sol";
 import "src/lib/Errors.sol";
 import {ReentrancyGuard} from "src/lib/ReentrancyGuard.sol";
 import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
+import {IAuctionableToken} from "src/interfaces/IAuctionableToken.sol";
 import {Commitment} from "src/lib/Structs.sol";
 
 contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
-    TulipToken public token;
+    IAuctionableToken public token;
 
     uint256 public initialTokenSupply;
 
@@ -39,7 +40,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         auctionIsStarted = false;
     }
 
-    function startAuction(address _tokenAddress,
+    function startAuction(IAuctionableToken _token,
     uint256 _initialTokenSupply,
     uint256 _startingPrice,
     uint256 _reservePrice,
@@ -51,7 +52,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsStarted();
         }
 
-        token = TulipToken(_tokenAddress);
+        token = _token;
 
         // @Phil: already checked at operatorMint
         // require(_token.totalSupply() + _initialTokenSupply <= _token.maxSupply(), 
