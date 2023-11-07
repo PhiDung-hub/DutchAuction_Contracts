@@ -55,5 +55,6 @@ interface IDutchAuction {
 
     function getCurrentPrice() external view returns (uint256);
 
+    function getRemainingAllowance() external view returns(uint256);
     ////////////////////////////
 }

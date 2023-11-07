@@ -188,7 +188,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsNotStarted();
         }
 
-        // @Phil: actualEndTime is enough to check, consider removing expectedEndTime.
         if (block.timestamp < actualEndTime + 10 * 60) {
           uint256 timeRemaining = actualEndTime + 10 * 60 - block.timestamp;
           revert NotWithdrawableYet(timeRemaining);
@@ -215,11 +214,15 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 soldNumOfToken = totalWeiCommitted / getCurrentPrice();
-        if (soldNumOfToken >= initialTokenSupply){
+        uint256 vestedSupply = totalWeiCommitted / getCurrentPrice();
+        if (vestedSupply >= initialTokenSupply){
             return 0;
         }
-        return initialTokenSupply - soldNumOfToken;
+        return initialTokenSupply - vestedSupply;
+    }
+
+    function getRemainingAllowance() view public returns(uint256) {
+        return maxWeiPerBidder - bidderToWei[msg.sender];
     }
 
     function getCurrentPrice() view public returns (uint256) {
