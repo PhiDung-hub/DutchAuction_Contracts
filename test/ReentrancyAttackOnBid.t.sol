@@ -19,7 +19,7 @@ contract ReentrancyAttackOnBidTest is Test {
         attackContract = new ReentrancyAttackOnBid(address(dutchAuction));
     }
 
-    function test_Attack() public {
+    function test_Attack_ReentrancyAttackFailed() public {
         uint256 initialTokenSupply = 100000;
         uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
