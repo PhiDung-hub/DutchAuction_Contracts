@@ -111,9 +111,25 @@ contract DutchAuctionTest is Test {
     function test_Bid_SoldOutAuction() public {
         _startValidDutchAuction();
         dutchAuction.bid{value:5 * 10 ** 9}();
-        dutchAuction.bid{value:6 * 10 ** 9}();  // how to simulate this bid coming quite significantly later than the first bid?
+        dutchAuction.bid{value:6 * 10 ** 9}();
         assertEq(dutchAuction.getCurrentPrice(), dutchAuction.clearingPrice());
         assertEq(block.timestamp, dutchAuction.endTime());
+    }
+
+    function test_Bid_RefundBidAmountExceedingValueOfRemainingTokens() public {
+        _startValidDutchAuction();
+        address[] memory users = _setUp_Users();
+
+        vm.prank(users[0]);
+        uint256 user1ComAmt = 5 * 10 ** 9;
+        dutchAuction.bid{value: user1ComAmt}();
+
+        uint256 user2BalanceBefore = users[1].balance;
+        vm.prank(users[1]);
+        uint256 user2ComAmt = 6 * 10 ** 9;
+        dutchAuction.bid{value: user2ComAmt}();
+        uint256 user2BalanceAfter = users[1].balance;
+        assertEq(5 * 10 ** 9, user2BalanceBefore - user2BalanceAfter);
     }
 
     function test_clearAuction_RevertWhen_TheresNoAuction() public {
