@@ -54,7 +54,7 @@ contract DutchAuctionTest is Test {
         assertEq(initialTokenSupply, token.balanceOf(address(dutchAuction)));
         assertEq(startPrice, dutchAuction.startPrice());
         assertEq(reservePrice, dutchAuction.reservePrice());
-        assertEq((startPrice - reservePrice) / durationInMinutes, dutchAuction.discountRate());
+        assertEq((startPrice - reservePrice) / (durationInMinutes - 1), dutchAuction.discountRate());
         assertEq(reservePrice, dutchAuction.clearingPrice());
         assertEq(block.timestamp, dutchAuction.startTime());
         assertEq(durationInMinutes, dutchAuction.duration());

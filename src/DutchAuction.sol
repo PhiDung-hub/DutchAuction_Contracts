@@ -62,7 +62,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         startPrice = _startPrice;
         reservePrice = _reservePrice;
-        discountRate = (_startPrice - _reservePrice) / duration; // Wei per minute
+        discountRate = (_startPrice - _reservePrice) / (duration - 1); // Wei per minute
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
