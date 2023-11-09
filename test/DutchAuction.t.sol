@@ -40,7 +40,7 @@ contract DutchAuctionTest is Test {
 
     function test_StartAuction() public {
         uint256 initialTokenSupply = 100000;
-        uint256 startingPrice = 100000;
+        uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
         uint256 bidderPercentageLimit = 10;
@@ -48,13 +48,13 @@ contract DutchAuctionTest is Test {
         vm.expectCall(
             address(token), abi.encodeCall(token.operatorMint, initialTokenSupply)
         );
-        dutchAuction.startAuction(token, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
+        dutchAuction.startAuction(token, initialTokenSupply, startPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
         
         assertEq(initialTokenSupply, dutchAuction.initialTokenSupply());
         assertEq(initialTokenSupply, token.balanceOf(address(dutchAuction)));
-        assertEq(startingPrice, dutchAuction.startingPrice());
+        assertEq(startPrice, dutchAuction.startPrice());
         assertEq(reservePrice, dutchAuction.reservePrice());
-        assertEq((startingPrice - reservePrice) / durationInMinutes, dutchAuction.discountRate());
+        assertEq((startPrice - reservePrice) / durationInMinutes, dutchAuction.discountRate());
         assertEq(reservePrice, dutchAuction.clearingPrice());
         assertEq(block.timestamp, dutchAuction.startTime());
         assertEq(durationInMinutes, dutchAuction.duration());
@@ -65,11 +65,11 @@ contract DutchAuctionTest is Test {
 
     function _startValidDutchAuction() private {
         uint256 initialTokenSupply = 100000;
-        uint256 startingPrice = 100000;
+        uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
         uint256 bidderPercentageLimit = 100000;
-        dutchAuction.startAuction(token, initialTokenSupply, startingPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
+        dutchAuction.startAuction(token, initialTokenSupply, startPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
     }
 
     function test_Bid_RevertWhen_NoWeiIsCommitted() public {
@@ -186,6 +186,7 @@ contract DutchAuctionTest is Test {
         _startValidDutchAuction();
         vm.warp(block.timestamp + 21 * 60);
         dutchAuction.clearAuction();
+        assertFalse(dutchAuction.auctionIsStarted());
     }
 
     function _setUp_Users() private returns(address[] memory) {
@@ -231,6 +232,7 @@ contract DutchAuctionTest is Test {
         assertEq(user2ComAmt / clearingPrice, token.balanceOf(users[1]));
         assertEq(user3ComAmt / clearingPrice, token.balanceOf(users[2]));
         assertEq(0, token.balanceOf(address(dutchAuction))); // remaining left-over tokens must be burnt
+        assertFalse(dutchAuction.auctionIsStarted());
     }
 
     function test_clearAuction_WhenSoldOut() public {
@@ -267,6 +269,7 @@ contract DutchAuctionTest is Test {
         assertEq(user2ComAmt / clearingPrice, token.balanceOf(users[1]));
         assertEq(user3SatisfiedComAmt / clearingPrice, token.balanceOf(users[2]));
         assertGt(10 ** 12, token.balanceOf(address(dutchAuction)));
+        assertFalse(dutchAuction.auctionIsStarted());
     }
 
     function test_withdraw_RevertWhen_NoAuction() public {
@@ -367,37 +370,37 @@ contract DutchAuctionTest is Test {
     }
 
     function test_getCurrentPrice_AtStart() public {
-        uint256 startingPrice = 100000;
+        uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
-        _startValidDutchAuction1(startingPrice, reservePrice, durationInMinutes);
+        _startValidDutchAuction1(startPrice, reservePrice, durationInMinutes);
 
         uint256 originalPrice = dutchAuction.getCurrentPrice();
-        assertEq(startingPrice, originalPrice);
+        assertEq(startPrice, originalPrice);
     }
 
     function test_getCurrentPrice_After1MinFromStart() public {
-        uint256 startingPrice = 100000;
+        uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
-        _startValidDutchAuction1(startingPrice, reservePrice, durationInMinutes);
+        _startValidDutchAuction1(startPrice, reservePrice, durationInMinutes);
 
         vm.warp(block.timestamp + 60);
 
-        uint256 expectedCurrentPrice = startingPrice - dutchAuction.discountRate() * (block.timestamp - dutchAuction.startTime()) / 60;
+        uint256 expectedCurrentPrice = startPrice - dutchAuction.discountRate() * (block.timestamp - dutchAuction.startTime()) / 60;
         uint256 currentPrice = dutchAuction.getCurrentPrice();
         assertEq(expectedCurrentPrice, currentPrice);
     }
 
     function test_getCurrentPrice_After5MinsFromStart() public {
-        uint256 startingPrice = 100000;
+        uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
-        _startValidDutchAuction1(startingPrice, reservePrice, durationInMinutes);
+        _startValidDutchAuction1(startPrice, reservePrice, durationInMinutes);
 
         vm.warp(block.timestamp + 60 * 5);
 
-        uint256 expectedCurrentPrice = startingPrice - dutchAuction.discountRate() * (block.timestamp - dutchAuction.startTime()) / 60;
+        uint256 expectedCurrentPrice = startPrice - dutchAuction.discountRate() * (block.timestamp - dutchAuction.startTime()) / 60;
         uint256 currentPrice = dutchAuction.getCurrentPrice();
         assertEq(expectedCurrentPrice, currentPrice);
     }
@@ -411,8 +414,8 @@ contract DutchAuctionTest is Test {
         assertEq(dutchAuction.reservePrice(), finalPrice);
     }
 
-    function _startValidDutchAuction1(uint256 _startingPrice, uint256 _reservePrice, uint256 _durationInMinutes) private {
-        dutchAuction.startAuction(token, 100000, _startingPrice, _reservePrice, _durationInMinutes, 100000);
+    function _startValidDutchAuction1(uint256 _startPrice, uint256 _reservePrice, uint256 _durationInMinutes) private {
+        dutchAuction.startAuction(token, 100000, _startPrice, _reservePrice, _durationInMinutes, 100000);
     }
 
     receive() external payable {}

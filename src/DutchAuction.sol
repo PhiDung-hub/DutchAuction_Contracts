@@ -13,7 +13,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
     uint256 public initialTokenSupply;
 
-    uint256 public startingPrice;
+    uint256 public startPrice;
     uint256 public reservePrice;
     uint256 public discountRate;
     uint256 public clearingPrice;
@@ -36,7 +36,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
     function startAuction(IAuctionableToken _token,
     uint256 _initialTokenSupply,
-    uint256 _startingPrice,
+    uint256 _startPrice,
     uint256 _reservePrice,
     uint256 _duration,  // in minutes
     uint256 _bidderPercentageLimit) external onlyOwner
@@ -48,8 +48,8 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         token = _token;
 
-        if (_startingPrice < _reservePrice) {
-            revert InvalidPrices(_startingPrice, _reservePrice);
+        if (_startPrice < _reservePrice) {
+            revert InvalidPrices(_startPrice, _reservePrice);
         }
 
         initialTokenSupply = _initialTokenSupply;
@@ -60,9 +60,9 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         duration = _duration;
         endTime = startTime + duration * 60;
 
-        startingPrice = _startingPrice;
+        startPrice = _startPrice;
         reservePrice = _reservePrice;
-        discountRate = (_startingPrice - _reservePrice) / duration; // Wei per minute
+        discountRate = (_startPrice - _reservePrice) / duration; // Wei per minute
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
@@ -72,7 +72,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         emit StartAuction(
             address(token), 
             _initialTokenSupply, 
-            _startingPrice, 
+            _startPrice, 
             _reservePrice, 
             _duration, 
             _bidderPercentageLimit
@@ -141,8 +141,9 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         // Distribute tokens to successful bidders
         for (uint256 i = 0; i < bidders.length; i++) {
             address bidder = bidders[i];
-            token.transfer(bidder, bidderToWei[bidder] / clearingPrice);
+            uint256 tokenAmount = bidderToWei[bidder] / clearingPrice;
             delete bidderToWei[bidder];
+            token.transfer(bidder, tokenAmount);
         }
 
         uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
@@ -211,6 +212,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         if (block.timestamp > startTime + duration * 60) {
             return reservePrice;
         }
-        return startingPrice - discountRate * ((block.timestamp - startTime) / 60);
+        return startPrice - discountRate * ((block.timestamp - startTime) / 60);
     }
 }
