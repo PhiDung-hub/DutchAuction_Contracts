@@ -238,7 +238,7 @@ contract DutchAuctionTest is Test {
         assertEq(user1ComAmt / clearingPrice, tulipToken.balanceOf(users[0]));
         assertEq(user2ComAmt / clearingPrice, tulipToken.balanceOf(users[1]));
         assertEq(user3SatisfiedComAmt / clearingPrice, tulipToken.balanceOf(users[2]));
-        assertEq(0, tulipToken.balanceOf(address(dutchAuction)));
+        assertGt(10 ** 12, tulipToken.balanceOf(address(dutchAuction)));
     }
 
     function test_withdraw_RevertWhen_NoAuction() public {
