@@ -99,24 +99,25 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         emit Bid(msg.sender, msg.value);
     }
 
-    function _validateBid(address bidder, uint256 committedAmount) internal returns (uint256 actualCommittedAmount) {
+    function _validateBid(address _bidder, uint256 _committedAmount) internal returns (uint256 actualCommittedAmount) {
         if (!isAuctioning()) {
             revert AuctionIsInactive();
         }
 
+        uint256 committedAmount = _committedAmount;
         if (committedAmount == 0) {
             revert ZeroCommitted();
         }
 
         // A bidder's total commitment must be smaller than maxWeiPerBidder.
-        if (bidderToWei[bidder] >= maxWeiPerBidder) {
+        if (bidderToWei[_bidder] >= maxWeiPerBidder) {
             revert BidLimitReached();
         }
 
         // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, or
         // if the bid causes totalNumberOfTokensCommitted to exceed initial token supply,
         // must refund the exceeded amount
-        uint256 maxComAmt1 = maxWeiPerBidder - bidderToWei[bidder];
+        uint256 maxComAmt1 = maxWeiPerBidder - bidderToWei[_bidder];
         uint256 maxComAmt2 = initialTokenSupply * getCurrentPrice() - totalWeiCommitted;
         uint256 maxComAmt = maxComAmt1 < maxComAmt2 ? maxComAmt1 : maxComAmt2;
         if (committedAmount > maxComAmt) {
@@ -185,10 +186,10 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     // Phil: no need to check amount=0 for internal function -> save gas.
-    function _refund(address _to, uint256 amount) internal {
+    function _refund(address _to, uint256 _amount) internal {
         require(_to != address(0), "Transfer to zero address");
         // Call returns a boolean value indicating success or failure.
-        (bool sent, ) = payable(_to).call{ value: amount }("");
+        (bool sent, ) = payable(_to).call{ value: _amount }("");
         require(sent, "ETH transfer failed");
     }
 
