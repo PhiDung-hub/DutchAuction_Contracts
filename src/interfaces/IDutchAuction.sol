@@ -2,7 +2,6 @@
 pragma solidity ^0.8.13;
 
 import {TulipToken} from "src/TulipToken.sol";
-import {Commitment} from "src/lib/Structs.sol";
 import {IAuctionableToken} from "./IAuctionableToken.sol";
 
 interface IDutchAuction {
