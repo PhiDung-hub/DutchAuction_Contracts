@@ -19,17 +19,17 @@ contract TulipToken is IAuctionableToken, ERC20Burnable, Ownable {
         maxSupply = _maxSupply;
     }
 
-    function operatorMint(uint256 amount) external onlyOwner {
+    function operatorMint(uint256 _amount) external onlyOwner {
         uint256 _mintLimit = maxSupply - totalSupply();
-        if (amount > _mintLimit) {
-            revert MintLimitExceeded(amount, _mintLimit);
+        if (_amount > _mintLimit) {
+            revert MintLimitExceeded(_amount, _mintLimit);
         }
-        _mint(owner(), amount);
+        _mint(owner(), _amount);
 
-        emit OperatorMint(amount);
+        emit OperatorMint(_amount);
     }
 
-    function burn(uint256 value) public override (IAuctionableToken, ERC20Burnable) {
-        super.burn(value);
+    function burn(uint256 _value) public override (IAuctionableToken, ERC20Burnable) {
+        super.burn(_value);
     }
 }
