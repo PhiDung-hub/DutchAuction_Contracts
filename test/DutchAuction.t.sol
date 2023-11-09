@@ -384,6 +384,16 @@ contract DutchAuctionTest is Test {
         assertEq(0, dutchAuction.getCurrentTokenSupply());
     }
 
+    function test_GetRemainingAllowance() public {
+        dutchAuction.startAuction(token, 100000, 100000, 10000, 20, 10);
+        uint256 bidValue1 = 100000;
+        dutchAuction.bid{value: bidValue1}();
+        uint256 bidValue2 = 200000;
+        dutchAuction.bid{value: bidValue2}();
+
+        assertEq(dutchAuction.maxWeiPerBidder() - bidValue1 - bidValue2, dutchAuction.getRemainingAllowance());
+    }
+
     function test_GetCurrentPrice_AtStart() public {
         uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
