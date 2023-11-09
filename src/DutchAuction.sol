@@ -176,7 +176,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert NotWithdrawableYet(timeRemaining);
         }
 
-        uint256 tokensWon = bidderToWei[msg.sender];
+        uint256 tokensWon = bidderToWei[msg.sender] / clearingPrice;
         require(tokensWon > 0, "No token to withdraw.");
         delete bidderToWei[msg.sender];
         token.transfer(msg.sender, tokensWon);

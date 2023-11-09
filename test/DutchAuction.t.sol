@@ -311,9 +311,12 @@ contract DutchAuctionTest is Test {
 
     function test_withdraw() public {
         _startValidDutchAuction();
-        dutchAuction.bid{value: 100000}();
+        uint256 commitAmt = 100000;
+        dutchAuction.bid{value: commitAmt}();
+        
         vm.warp(block.timestamp + 30 * 60 + 1);
         dutchAuction.withdraw();
+        assertEq(commitAmt / dutchAuction.clearingPrice(), token.balanceOf(address(this)));
     }
 
     function test_IsAuctioning() public {
