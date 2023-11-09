@@ -11,11 +11,11 @@ error AuctionIsInactive();
 error AuctionIsNotStarted();
 error AuctionIsNotEnded();
 error NotWithdrawableYet(uint256 timeRemaining);
+error InvalidPrices(uint256 startingPrice, uint256 reservePrice);
 
 // Futures error
 error AuctionIsSettled();
 
 // Biddings
-error PriceTooHigh();
 error ZeroCommitted();
 error BidLimitReached();

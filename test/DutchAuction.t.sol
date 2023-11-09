@@ -26,6 +26,12 @@ contract DutchAuctionTest is Test {
         dutchAuction.startAuction(tulipToken, 100000, 100, 20, 20, 10);
     }
 
+    function test_StartAuction_RevertWhen_PricesInvalid() public {
+        bytes4 errorSelector = bytes4(keccak256("InvalidPrices(uint256,uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(errorSelector, 100, 101));
+        dutchAuction.startAuction(tulipToken, 1000001, 100, 101, 20, 10);
+    }
+
     function test_StartAuction_RevertWhen_ExceedMaxTokenSupply() public {
         bytes4 errorSelector = bytes4(keccak256("MintLimitExceeded(uint256,uint256)"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector, 1000001, 1000000));

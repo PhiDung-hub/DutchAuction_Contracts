@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {TulipToken} from "./TulipToken.sol";
 import "src/lib/Errors.sol";
 import {ReentrancyGuard} from "src/lib/ReentrancyGuard.sol";
 import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
@@ -49,6 +47,10 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         }
 
         token = _token;
+
+        if (_startingPrice < _reservePrice) {
+            revert InvalidPrices(_startingPrice, _reservePrice);
+        }
 
         initialTokenSupply = _initialTokenSupply;
         // Minting the initial token supply to the DutchAuction contract
