@@ -84,17 +84,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     function bid() external payable nonReentrant {
         uint256 committedAmount = _validateBid(msg.sender, msg.value);
 
-        // If the bid causes totalNumberOfTokensCommitted to exceed initial token supply, need to do refund
-        uint256 currentPrice = getCurrentPrice();
-
-        if (totalWeiCommitted + committedAmount > initialTokenSupply * currentPrice) {
-            uint256 unsatisfiedCommitmentAmount = totalWeiCommitted + committedAmount - initialTokenSupply * currentPrice;
-            committedAmount -= unsatisfiedCommitmentAmount;
-
-            // Refund the unsatisfied commitment amount
-            _refund(msg.sender, unsatisfiedCommitmentAmount);
-        }
-
         if (bidderToWei[msg.sender] == 0) {
             bidders.push(msg.sender);
         }
@@ -124,8 +113,12 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
             revert BidLimitReached();
         }
 
-        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
-        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[bidder];
+        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, or
+        // if the bid causes totalNumberOfTokensCommitted to exceed initial token supply,
+        // must refund the exceeded amount
+        uint256 maxComAmt1 = maxWeiPerBidder - bidderToWei[bidder];
+        uint256 maxComAmt2 = initialTokenSupply * getCurrentPrice() - totalWeiCommitted;
+        uint256 maxComAmt = maxComAmt1 < maxComAmt2 ? maxComAmt1 : maxComAmt2;
         if (committedAmount > maxComAmt) {
             uint256 refundAmt = committedAmount - maxComAmt;
             committedAmount = maxComAmt;

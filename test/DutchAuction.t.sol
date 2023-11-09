@@ -103,24 +103,12 @@ contract DutchAuctionTest is Test {
 
     function test_Bid_RefundBidAmountExceedingMax() public {
         dutchAuction.startAuction(token, 100000, 100000, 10000, 20, 10);
-        vm.expectCall(
-            address(this), 5, ""
-        );
+        address thisAddress = address(this);
+        uint256 balanceBefore = thisAddress.balance;
+        vm.expectCall(thisAddress, 5, "");
         dutchAuction.bid{value:10000 * 10000 + 5}();
-    }
-
-    function test_Bid() public {
-        _startValidDutchAuction();
-        uint256 committedAmount = 50000000;
-        dutchAuction.bid{value:committedAmount}();
-    }
-
-    function test_Bid_SoldOutAuction() public {
-        _startValidDutchAuction();
-        dutchAuction.bid{value:5 * 10 ** 9}();
-        dutchAuction.bid{value:6 * 10 ** 9}();
-        assertEq(dutchAuction.getCurrentPrice(), dutchAuction.clearingPrice());
-        assertEq(block.timestamp, dutchAuction.endTime());
+        uint256 balanceAfter = thisAddress.balance;
+        assertEq(10000 * 10000, balanceBefore - balanceAfter);
     }
 
     function test_Bid_RefundBidAmountExceedingValueOfRemainingTokens() public {
@@ -134,9 +122,42 @@ contract DutchAuctionTest is Test {
         uint256 user2BalanceBefore = users[1].balance;
         vm.prank(users[1]);
         uint256 user2ComAmt = 6 * 10 ** 9;
+        vm.expectCall(users[1], 1 * 10 ** 9, "");
         dutchAuction.bid{value: user2ComAmt}();
         uint256 user2BalanceAfter = users[1].balance;
         assertEq(5 * 10 ** 9, user2BalanceBefore - user2BalanceAfter);
+    }
+
+    function test_Bid_RefundBidAmountExceedingMaxAndValueOfRemainingTokens() public {
+        dutchAuction.startAuction(token, 100000, 100000, 100000, 20, 60);
+        address[] memory users = _setUp_Users();
+
+        vm.prank(users[0]);
+        uint256 user1ComAmt = 5 * 10 ** 9;
+        dutchAuction.bid{value: user1ComAmt}();
+
+        uint256 user2BalanceBefore = users[1].balance;
+        vm.prank(users[1]);
+        uint256 user2ComAmt = 7 * 10 ** 9;
+        vm.expectCall(users[1], 2 * 10 ** 9, "");
+        dutchAuction.bid{value: user2ComAmt}();
+        uint256 user2BalanceAfter = users[1].balance;
+        assertEq(5 * 10 ** 9, user2BalanceBefore - user2BalanceAfter);
+    }
+
+    function test_Bid() public {
+        _startValidDutchAuction();
+        uint256 committedAmount = 50000000;
+        dutchAuction.bid{value:committedAmount}();
+    }
+
+    function test_Bid_SoldOutAuction() public {
+        _startValidDutchAuction();
+        dutchAuction.bid{value:5 * 10 ** 9}();
+        vm.warp(block.timestamp + 1 * 60);
+        dutchAuction.bid{value:6 * 10 ** 9}();
+        assertEq(dutchAuction.getCurrentPrice(), dutchAuction.clearingPrice());
+        assertEq(block.timestamp, dutchAuction.endTime());
     }
 
     function test_clearAuction_RevertWhen_TheresNoAuction() public {
