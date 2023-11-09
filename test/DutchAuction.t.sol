@@ -160,20 +160,20 @@ contract DutchAuctionTest is Test {
         assertEq(block.timestamp, dutchAuction.endTime());
     }
 
-    function test_clearAuction_RevertWhen_TheresNoAuction() public {
+    function test_ClearAuction_RevertWhen_TheresNoAuction() public {
         bytes4 errorSelector = bytes4(keccak256("AuctionIsNotStarted()"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.clearAuction();
     }
 
-    function test_clearAuction_RevertWhen_AuctionInProgress() public {
+    function test_ClearAuction_RevertWhen_AuctionInProgress() public {
         _startValidDutchAuction();
         bytes4 errorSelector = bytes4(keccak256("AuctionIsNotEnded()"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.clearAuction();
     }
 
-    function test_clearAuction_RevertWhen_CalledTwice() public {
+    function test_ClearAuction_RevertWhen_CalledTwice() public {
         _startValidDutchAuction();
         dutchAuction.bid{value: 1 * 10 ** 12}();
         dutchAuction.clearAuction();
@@ -182,7 +182,7 @@ contract DutchAuctionTest is Test {
         dutchAuction.clearAuction();
     }
 
-    function test_clearAuction_WhenNoBid() public {
+    function test_ClearAuction_WhenNoBid() public {
         _startValidDutchAuction();
         vm.warp(block.timestamp + 21 * 60);
         dutchAuction.clearAuction();
@@ -200,7 +200,7 @@ contract DutchAuctionTest is Test {
         return users;
     }
 
-    function test_clearAuction_WhenNotSoldOut() public {
+    function test_ClearAuction_WhenNotSoldOut() public {
         _startValidDutchAuction();
         address[] memory users = _setUp_Users();
 
@@ -235,7 +235,7 @@ contract DutchAuctionTest is Test {
         assertFalse(dutchAuction.auctionIsStarted());
     }
 
-    function test_clearAuction_WhenSoldOut() public {
+    function test_ClearAuction_WhenSoldOut() public {
         _startValidDutchAuction();
         address[] memory users = _setUp_Users();
 
@@ -272,20 +272,20 @@ contract DutchAuctionTest is Test {
         assertFalse(dutchAuction.auctionIsStarted());
     }
 
-    function test_withdraw_RevertWhen_NoAuction() public {
+    function test_Withdraw_RevertWhen_NoAuction() public {
         bytes4 errorSelector = bytes4(keccak256("AuctionIsNotStarted()"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector));
         dutchAuction.withdraw();
     }
 
-    function test_withdraw_RevertWhen_AuctionInProgress() public {
+    function test_Withdraw_RevertWhen_AuctionInProgress() public {
         _startValidDutchAuction();
         bytes4 errorSelector = bytes4(keccak256("NotWithdrawableYet(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(errorSelector, 30 * 60));
         dutchAuction.withdraw();
     }
 
-    function test_withdraw_RevertWhen_Not10MinsYetFromAuctionTimeEnded() public {
+    function test_Withdraw_RevertWhen_Not10MinsYetFromAuctionTimeEnded() public {
         _startValidDutchAuction();
         vm.warp(block.timestamp + 21 * 60);
         bytes4 errorSelector = bytes4(keccak256("NotWithdrawableYet(uint256)"));
@@ -293,7 +293,7 @@ contract DutchAuctionTest is Test {
         dutchAuction.withdraw();
     }
 
-    function test_withdraw_RevertWhen_Not10MinsYetFromAuctionSoldOut() public {
+    function test_Withdraw_RevertWhen_Not10MinsYetFromAuctionSoldOut() public {
         _startValidDutchAuction();
         dutchAuction.bid{value: 1 * 10 ** 12}();
         vm.warp(block.timestamp + 9 * 60);
@@ -302,19 +302,31 @@ contract DutchAuctionTest is Test {
         dutchAuction.withdraw();
     }
 
-    function test_withdraw_RevertWhen_NoAmountToWithdraw() public {
+    function test_Withdraw_RevertWhen_NoAmountToWithdraw() public {
         _startValidDutchAuction();
         vm.warp(block.timestamp + 30 * 60 + 1);
         vm.expectRevert("No token to withdraw.");
         dutchAuction.withdraw();
     }
 
-    function test_withdraw() public {
+    function test_Withdraw() public {
         _startValidDutchAuction();
         uint256 commitAmt = 100000;
         dutchAuction.bid{value: commitAmt}();
-        
+
         vm.warp(block.timestamp + 30 * 60 + 1);
+        dutchAuction.withdraw();
+        assertEq(commitAmt / dutchAuction.clearingPrice(), token.balanceOf(address(this)));
+    }
+
+    function test_Withdraw_RevertWhen_CalledTwice() public {
+        _startValidDutchAuction();
+        uint256 commitAmt = 100000;
+        dutchAuction.bid{value: commitAmt}();
+
+        vm.warp(block.timestamp + 30 * 60 + 1);
+        dutchAuction.withdraw();
+        vm.expectRevert("No token to withdraw.");
         dutchAuction.withdraw();
         assertEq(commitAmt / dutchAuction.clearingPrice(), token.balanceOf(address(this)));
     }
@@ -330,7 +342,7 @@ contract DutchAuctionTest is Test {
         assertFalse(isAuctioning);
     }
 
-    function test_isAuctioning_AuctionisClosed_WhenTimeoutButNotSoldOut() public {
+    function test_IsAuctioning_AuctionisClosed_WhenTimeoutButNotSoldOut() public {
         _startValidDutchAuction();
 
         dutchAuction.bid{value: 1000}();
@@ -341,7 +353,7 @@ contract DutchAuctionTest is Test {
         assertFalse(isAuctioning);
     }
 
-    function test_isAuctioning_AuctionisClosed_WhenSoldOut() public {
+    function test_IsAuctioning_AuctionisClosed_WhenSoldOut() public {
         _startValidDutchAuction();
 
         dutchAuction.bid{value: 1 * 10 ** 12}();
@@ -349,7 +361,7 @@ contract DutchAuctionTest is Test {
         assertFalse(isAuctioning);
     }
 
-    function test_getCurrentTokenSupply() public {
+    function test_GetCurrentTokenSupply() public {
         uint256 initialSupply = 100000;
         dutchAuction.startAuction(token, initialSupply, 100000, 10000, 20, 100000);
 
@@ -362,7 +374,7 @@ contract DutchAuctionTest is Test {
         assertEq(expectedCurrentTokenSupply, dutchAuction.getCurrentTokenSupply());
     }
 
-    function test_getCurrentTokenSupply_WhenSoldOut() public {
+    function test_GetCurrentTokenSupply_WhenSoldOut() public {
         uint256 initialSupply = 100000;
         dutchAuction.startAuction(token, initialSupply, 100000, 10000, 20, 100000);
 
@@ -372,7 +384,7 @@ contract DutchAuctionTest is Test {
         assertEq(0, dutchAuction.getCurrentTokenSupply());
     }
 
-    function test_getCurrentPrice_AtStart() public {
+    function test_GetCurrentPrice_AtStart() public {
         uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
@@ -382,7 +394,7 @@ contract DutchAuctionTest is Test {
         assertEq(startPrice, originalPrice);
     }
 
-    function test_getCurrentPrice_After1MinFromStart() public {
+    function test_GetCurrentPrice_After1MinFromStart() public {
         uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
@@ -395,7 +407,7 @@ contract DutchAuctionTest is Test {
         assertEq(expectedCurrentPrice, currentPrice);
     }
 
-    function test_getCurrentPrice_After5MinsFromStart() public {
+    function test_GetCurrentPrice_After5MinsFromStart() public {
         uint256 startPrice = 100000;
         uint256 reservePrice = 10000;
         uint256 durationInMinutes = 20;
@@ -408,10 +420,10 @@ contract DutchAuctionTest is Test {
         assertEq(expectedCurrentPrice, currentPrice);
     }
 
-    function test_getCurrentPrice_AtAuctionEnd() public {
+    function test_GetCurrentPrice_AtAuctionEnd() public {
         _startValidDutchAuction();
 
-        vm.warp(block.timestamp + dutchAuction.duration() * 60);
+        vm.warp(block.timestamp + dutchAuction.duration() * 60 + 1);
 
         uint256 finalPrice = dutchAuction.getCurrentPrice();
         assertEq(dutchAuction.reservePrice(), finalPrice);
