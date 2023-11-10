@@ -60,7 +60,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         startingPrice = _startingPrice;
         reservePrice = _reservePrice;
-        discountRate = (_startingPrice - _reservePrice) / duration; // Wei per minute
+        discountRate = (_startingPrice - _reservePrice) / (duration -1); // Wei per minute
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
@@ -99,7 +99,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         bidderToWei[msg.sender] += committedAmount;
         totalWeiCommitted += committedAmount;
 
-        if (getCurrentTokenSupply() == 0) {
+        if (getCurrentTokenSupply() <= 1e6) {
             endTime = block.timestamp;
             clearingPrice = getCurrentPrice();
             emit SoldOut(clearingPrice);
@@ -139,7 +139,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsNotStarted();
         }
 
-        if (block.timestamp <= endTime && getCurrentTokenSupply() > 0) {
+        if (block.timestamp <= endTime && getCurrentTokenSupply() > 1e6) {
             revert AuctionIsNotEnded();
         }
 
@@ -197,7 +197,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function isAuctioning() view public returns (bool) {
-        return auctionIsStarted && block.timestamp <= endTime && getCurrentTokenSupply() > 0;
+        return auctionIsStarted && block.timestamp <= endTime && getCurrentTokenSupply() > 1e6;
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
