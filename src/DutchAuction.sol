@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-import {TulipToken} from "./TulipToken.sol";
 import "src/lib/Errors.sol";
 import {ReentrancyGuard} from "src/lib/ReentrancyGuard.sol";
 import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
@@ -15,7 +13,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
     uint256 public initialTokenSupply;
 
-    uint256 public startingPrice;
+    uint256 public startPrice;
     uint256 public reservePrice;
     uint256 public discountRate;
     uint256 public clearingPrice;
@@ -38,7 +36,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
     function startAuction(IAuctionableToken _token,
     uint256 _initialTokenSupply,
-    uint256 _startingPrice,
+    uint256 _startPrice,
     uint256 _reservePrice,
     uint256 _duration,  // in minutes
     uint256 _bidderPercentageLimit) external onlyOwner
@@ -50,6 +48,10 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         token = _token;
 
+        if (_startPrice < _reservePrice) {
+            revert InvalidPrices(_startPrice, _reservePrice);
+        }
+
         initialTokenSupply = _initialTokenSupply;
         // Minting the initial token supply to the DutchAuction contract
         token.operatorMint(initialTokenSupply);
@@ -58,9 +60,9 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         duration = _duration;
         endTime = startTime + duration * 60;
 
-        startingPrice = _startingPrice;
+        startPrice = _startPrice;
         reservePrice = _reservePrice;
-        discountRate = (_startingPrice - _reservePrice) / (duration -1); // Wei per minute
+        discountRate = (_startPrice - _reservePrice) / (duration - 1); // Wei per minute
         clearingPrice = _reservePrice;
 
         auctionIsStarted = true;
@@ -70,7 +72,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         emit StartAuction(
             address(token), 
             _initialTokenSupply, 
-            _startingPrice, 
+            _startPrice, 
             _reservePrice, 
             _duration, 
             _bidderPercentageLimit
@@ -81,17 +83,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     // Bidder commits ether
     function bid() external payable nonReentrant {
         uint256 committedAmount = _validateBid(msg.sender, msg.value);
-
-        // If the bid causes totalNumberOfTokensCommitted to exceed initial token supply, need to do refund
-        uint256 currentPrice = getCurrentPrice();
-
-        if (totalWeiCommitted + committedAmount > initialTokenSupply * currentPrice) {
-            uint256 unsatisfiedCommitmentAmount = totalWeiCommitted + committedAmount - initialTokenSupply * currentPrice;
-            committedAmount -= unsatisfiedCommitmentAmount;
-
-            // Refund the unsatisfied commitment amount
-            _refund(msg.sender, unsatisfiedCommitmentAmount);
-        }
 
         if (bidderToWei[msg.sender] == 0) {
             bidders.push(msg.sender);
@@ -108,22 +99,27 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         emit Bid(msg.sender, msg.value);
     }
 
-    function _validateBid(address bidder, uint256 committedAmount) internal returns (uint256 actualCommittedAmount) {
+    function _validateBid(address _bidder, uint256 _committedAmount) internal returns (uint256 actualCommittedAmount) {
         if (!isAuctioning()) {
             revert AuctionIsInactive();
         }
 
+        uint256 committedAmount = _committedAmount;
         if (committedAmount == 0) {
             revert ZeroCommitted();
         }
 
         // A bidder's total commitment must be smaller than maxWeiPerBidder.
-        if (bidderToWei[bidder] >= maxWeiPerBidder) {
+        if (bidderToWei[_bidder] >= maxWeiPerBidder) {
             revert BidLimitReached();
         }
 
-        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, must refund the exceeded amount
-        uint256 maxComAmt = maxWeiPerBidder - bidderToWei[bidder];
+        // If the bid makes the bidder's total commitment larger than maxWeiPerBidder, or
+        // if the bid causes totalNumberOfTokensCommitted to exceed initial token supply,
+        // must refund the exceeded amount
+        uint256 maxComAmt1 = maxWeiPerBidder - bidderToWei[_bidder];
+        uint256 maxComAmt2 = initialTokenSupply * getCurrentPrice() - totalWeiCommitted;
+        uint256 maxComAmt = maxComAmt1 < maxComAmt2 ? maxComAmt1 : maxComAmt2;
         if (committedAmount > maxComAmt) {
             uint256 refundAmt = committedAmount - maxComAmt;
             committedAmount = maxComAmt;
@@ -146,8 +142,9 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         // Distribute tokens to successful bidders
         for (uint256 i = 0; i < bidders.length; i++) {
             address bidder = bidders[i];
-            token.transfer(bidder, bidderToWei[bidder] / clearingPrice);
+            uint256 tokenAmount = bidderToWei[bidder] / clearingPrice;
             delete bidderToWei[bidder];
+            token.transfer(bidder, tokenAmount);
         }
 
         uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
@@ -180,7 +177,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert NotWithdrawableYet(timeRemaining);
         }
 
-        uint256 tokensWon = bidderToWei[msg.sender];
+        uint256 tokensWon = bidderToWei[msg.sender] / clearingPrice;
         require(tokensWon > 0, "No token to withdraw.");
         delete bidderToWei[msg.sender];
         token.transfer(msg.sender, tokensWon);
@@ -189,10 +186,10 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     // Phil: no need to check amount=0 for internal function -> save gas.
-    function _refund(address _to, uint256 amount) internal {
+    function _refund(address _to, uint256 _amount) internal {
         require(_to != address(0), "Transfer to zero address");
         // Call returns a boolean value indicating success or failure.
-        (bool sent, ) = payable(_to).call{ value: amount }("");
+        (bool sent, ) = payable(_to).call{ value: _amount }("");
         require(sent, "ETH transfer failed");
     }
 
@@ -216,6 +213,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         if (block.timestamp > startTime + duration * 60) {
             return reservePrice;
         }
-        return startingPrice - discountRate * ((block.timestamp - startTime) / 60);
+        return startPrice - discountRate * ((block.timestamp - startTime) / 60);
     }
 }
