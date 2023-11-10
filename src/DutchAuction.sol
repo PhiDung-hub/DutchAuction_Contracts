@@ -31,7 +31,6 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     address[] bidders;
 
     constructor() Ownable(msg.sender) {
-        auctionIsStarted = false;
     }
 
     function startAuction(IAuctionableToken _token,
