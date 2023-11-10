@@ -15,23 +15,23 @@ contract ReentrancyAttackOnBidTest is Test {
 
     function setUp() public {
         dutchAuction = new DutchAuction();
-        token = new TulipToken(1000000, address(dutchAuction));
+        token = new TulipToken(1000 ether, address(dutchAuction));
         attackContract = new ReentrancyAttackOnBid(address(dutchAuction));
     }
 
     function test_Attack_ReentrancyAttackFailed() public {
-        uint256 initialTokenSupply = 100000;
-        uint256 startPrice = 100000;
-        uint256 reservePrice = 10000;
+        uint256 initialTokenSupply = 100 ether;
+        uint256 startPrice = 0.02 ether;
+        uint256 reservePrice = 0.001 ether;
         dutchAuction.startAuction(token, initialTokenSupply, startPrice, reservePrice, 20, 100000);
 
-        uint256 bidAmt1 = 5 * 10 ** 9;
+        uint256 bidAmt1 = 1 ether;
         dutchAuction.bid{value: bidAmt1}();
 
-        uint256 attackContractInitBal = 5 * 10 ** 10;
+        uint256 attackContractInitBal = 10 ether;
         vm.deal(address(attackContract), attackContractInitBal);
         vm.expectRevert("ETH transfer failed");
-        attackContract.attack{value: 6 * 10 ** 9}();
+        attackContract.attack{value: 1.5 ether}();
 
         assertEq(bidAmt1, address(dutchAuction).balance);
         assertEq(attackContractInitBal, address(attackContract).balance);

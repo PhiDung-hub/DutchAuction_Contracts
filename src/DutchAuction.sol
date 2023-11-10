@@ -3,8 +3,10 @@ pragma solidity ^0.8.13;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
+import "src/lib/WadMath.sol";
 import "src/lib/Errors.sol";
 import {ReentrancyGuard} from "src/lib/ReentrancyGuard.sol";
+
 import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
 import {IAuctionableToken} from "src/interfaces/IAuctionableToken.sol";
 
@@ -31,6 +33,10 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     address[] bidders;
 
     constructor() Ownable(msg.sender) {
+    }
+
+    function operatorWithdraw() external onlyOwner {
+      payable(owner()).call{ value: address(this).balance }("");
     }
 
     function startAuction(IAuctionableToken _token,
@@ -66,7 +72,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         auctionIsStarted = true;
 
-        maxWeiPerBidder = _initialTokenSupply * _bidderPercentageLimit / 100 * reservePrice;
+        maxWeiPerBidder = WadMath.mulWadDown(_initialTokenSupply, reservePrice) * _bidderPercentageLimit / 100;
 
         emit StartAuction(
             address(token), 
@@ -89,7 +95,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         bidderToWei[msg.sender] += committedAmount;
         totalWeiCommitted += committedAmount;
 
-        if (getCurrentTokenSupply() <= 1e6) {
+        if (getCurrentTokenSupply() <= 1e3) {
             endTime = block.timestamp;
             clearingPrice = getCurrentPrice();
             emit SoldOut(clearingPrice);
@@ -117,7 +123,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         // if the bid causes totalNumberOfTokensCommitted to exceed initial token supply,
         // must refund the exceeded amount
         uint256 maxComAmt1 = maxWeiPerBidder - bidderToWei[_bidder];
-        uint256 maxComAmt2 = initialTokenSupply * getCurrentPrice() - totalWeiCommitted;
+        uint256 maxComAmt2 = WadMath.mulWadDown(initialTokenSupply, getCurrentPrice()) - totalWeiCommitted;
         uint256 maxComAmt = maxComAmt1 < maxComAmt2 ? maxComAmt1 : maxComAmt2;
         if (committedAmount > maxComAmt) {
             uint256 refundAmt = committedAmount - maxComAmt;
@@ -134,19 +140,19 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert AuctionIsNotStarted();
         }
 
-        if (block.timestamp <= endTime && getCurrentTokenSupply() > 1e6) {
+        if (block.timestamp <= endTime && getCurrentTokenSupply() > 1e3) {
             revert AuctionIsNotEnded();
         }
 
         // Distribute tokens to successful bidders
         for (uint256 i = 0; i < bidders.length; i++) {
             address bidder = bidders[i];
-            uint256 tokenAmount = bidderToWei[bidder] / clearingPrice;
+            uint256 tokenAmount = WadMath.divWadDown(bidderToWei[bidder], clearingPrice);
             delete bidderToWei[bidder];
             token.transfer(bidder, tokenAmount);
         }
 
-        uint256 totalNumberOfTokensCommitted = totalWeiCommitted / clearingPrice;
+        uint256 totalNumberOfTokensCommitted = WadMath.divWadDown(totalWeiCommitted, clearingPrice);
         if (totalNumberOfTokensCommitted < initialTokenSupply) {
             // Burn the remaining tokens
             token.burn(initialTokenSupply - totalNumberOfTokensCommitted);
@@ -176,7 +182,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert NotWithdrawableYet(timeRemaining);
         }
 
-        uint256 tokensWon = bidderToWei[msg.sender] / clearingPrice;
+        uint256 tokensWon = WadMath.divWadDown(bidderToWei[msg.sender], clearingPrice);
         require(tokensWon > 0, "No token to withdraw.");
         delete bidderToWei[msg.sender];
         token.transfer(msg.sender, tokensWon);
@@ -193,19 +199,19 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function isAuctioning() view public returns (bool) {
-        return auctionIsStarted && block.timestamp <= endTime && getCurrentTokenSupply() > 1e6;
+        return auctionIsStarted && block.timestamp <= endTime && getCurrentTokenSupply() > 1e3;
     }
 
     function getCurrentTokenSupply() view public returns(uint256) {
-        uint256 vestedSupply = totalWeiCommitted / getCurrentPrice();
+        uint256 vestedSupply = WadMath.divWadDown(totalWeiCommitted, getCurrentPrice());
         if (vestedSupply >= initialTokenSupply){
             return 0;
         }
         return initialTokenSupply - vestedSupply;
     }
 
-    function getRemainingAllowance() view public returns(uint256) {
-        return maxWeiPerBidder - bidderToWei[msg.sender];
+    function getRemainingAllowance(address _caller) view public returns(uint256) {
+        return maxWeiPerBidder - bidderToWei[_caller];
     }
 
     function getCurrentPrice() view public returns (uint256) {
