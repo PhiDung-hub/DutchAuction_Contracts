@@ -36,6 +36,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
     }
 
     function operatorWithdraw() external onlyOwner {
+      require(!auctionIsStarted, "Don't rug your users");
       (bool sent, ) = payable(owner()).call{ value: address(this).balance }("");
       require(sent, "Failed to withdraw");
     }
@@ -184,6 +185,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
     function _resetTracking() internal {
         delete bidders;
+        totalWeiCommitted = 0;
     }
 
     function withdraw() external nonReentrant {

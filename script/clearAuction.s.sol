@@ -10,7 +10,7 @@ contract ClearAuctionScript is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-        DutchAuction auction = DutchAuction(0xB22c6547A98d70D8A55Dc6bA03d450780dAe0D58);
+        DutchAuction auction = DutchAuction(0xc24C29e9e71E03447b7FdfAd37198201d6722211);
         auction.clearAuction();
         vm.stopBroadcast();
     }
