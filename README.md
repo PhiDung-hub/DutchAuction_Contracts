@@ -36,13 +36,13 @@
 
 ## Repo structure
 
-+ ** 'src/' ** : Contains the source code of the repository
++  'src/': Contains the source code of the repository
 
-+ ** 'test/' ** : Contains the test scripts to test the functionalities of Contracts
++  'test/': Contains the test scripts to test the functionalities of Contracts
 
-+ ** 'script/' ** : Contains the scripts to deploy and control Tokens and Dutch Auction Contracts
++  'script/': Contains the scripts to deploy Tokens and Dutch Auction Contracts, and to run startAuction, clearAuction and withdraw
 
-+ ** 'lib/' ** : Contains the necessary imports
++  'lib/': Contains the necessary imports
 
 ## Local Instruction
 
