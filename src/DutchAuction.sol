@@ -199,6 +199,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
 
         uint256 refundAmount = bidderToWei[msg.sender];
         delete bidderToWei[msg.sender];
+        totalWeiCommitted -= refundAmount;
         _refund(msg.sender, refundAmount);
 
         emit Withdraw(msg.sender, refundAmount);
