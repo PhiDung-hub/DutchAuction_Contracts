@@ -19,7 +19,7 @@ interface IDutchAuction {
 
     event AuctionSettled();
 
-    event Withdraw(address successfulBidder, uint256 amountWon);
+    event Withdraw(address successfulBidder, uint256 amount);
 
     event SoldOut(uint256 clearingPrice);
 

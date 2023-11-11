@@ -306,33 +306,15 @@ contract DutchAuctionTest is Test {
         dutchAuction.withdraw();
     }
 
-    function test_Withdraw_RevertWhen_NoAmountToWithdraw() public {
-        _startValidDutchAuction();
-        vm.warp(block.timestamp + 30 * 60 + 1);
-        vm.expectRevert("No token to withdraw.");
-        dutchAuction.withdraw();
-    }
-
     function test_Withdraw() public {
         _startValidDutchAuction();
-        uint256 commitAmt = 100000;
+        uint256 commitAmt = 1e5;
         dutchAuction.bid{value: commitAmt}();
 
         vm.warp(block.timestamp + 30 * 60 + 1);
+        uint256 initialBalance = address(this).balance;
         dutchAuction.withdraw();
-        assertEq(commitAmt * 1e18 / dutchAuction.clearingPrice(), token.balanceOf(address(this)));
-    }
-
-    function test_Withdraw_RevertWhen_CalledTwice() public {
-        _startValidDutchAuction();
-        uint256 commitAmt = 100000;
-        dutchAuction.bid{value: commitAmt}();
-
-        vm.warp(block.timestamp + 30 * 60 + 1);
-        dutchAuction.withdraw();
-        vm.expectRevert("No token to withdraw.");
-        dutchAuction.withdraw();
-        assertEq(commitAmt * 1e18 / dutchAuction.clearingPrice(), token.balanceOf(address(this)));
+        assertEq(commitAmt, address(this).balance - initialBalance);
     }
 
     function test_IsAuctioning() public {

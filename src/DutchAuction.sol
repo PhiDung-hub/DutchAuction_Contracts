@@ -172,7 +172,7 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         delete bidders;
     }
 
-    function withdraw() external {
+    function withdraw() external nonReentrant {
         // Can only withdraw when auction has started and ended for at least 10 mins
         if (!auctionIsStarted) {
           revert AuctionIsNotStarted();
@@ -183,12 +183,11 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
           revert NotWithdrawableYet(timeRemaining);
         }
 
-        uint256 tokensWon = WadMath.divWadDown(bidderToWei[msg.sender], clearingPrice);
-        require(tokensWon > 0, "No token to withdraw.");
+        uint256 refundAmount = bidderToWei[msg.sender];
         delete bidderToWei[msg.sender];
-        token.transfer(msg.sender, tokensWon);
+        _refund(msg.sender, refundAmount);
 
-        emit Withdraw(msg.sender, tokensWon);
+        emit Withdraw(msg.sender, refundAmount);
     }
 
     // Phil: no need to check amount=0 for internal function -> save gas.
