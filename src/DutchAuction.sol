@@ -215,4 +215,10 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         }
         return startPrice - discountRate * ((block.timestamp - startTime) / 60);
     }
+
+    function claimAuctionRevenue() external onlyOwner {
+        uint256 balance = address(this).balance;
+        (bool result, ) = msg.sender.call{ value: balance }("");
+        require(result, "Claim auction revenue failed.");
+    }
 }
