@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
+import "forge-std/console.sol";
 import {DutchAuction} from "src/DutchAuction.sol";
 import {TulipToken} from "src/TulipToken.sol";
 import {IAuctionableToken} from "src/interfaces/IAuctionableToken.sol";
@@ -67,8 +68,8 @@ contract DutchAuctionTest is Test {
 
     function _startValidDutchAuction() private {
         uint256 initialTokenSupply = 1e20;
-        uint256 startPrice = 2e16;
-        uint256 reservePrice = 1e15;
+        uint256 startPrice = 0.02 ether;
+        uint256 reservePrice = 0.001 ether;
         uint256 durationInMinutes = 20;
         uint256 bidderPercentageLimit = 10000;
         dutchAuction.startAuction(token, initialTokenSupply, startPrice, reservePrice, durationInMinutes, bidderPercentageLimit);
@@ -108,7 +109,6 @@ contract DutchAuctionTest is Test {
         address thisAddress = address(this);
         uint256 balanceBefore = thisAddress.balance;
         vm.expectCall(thisAddress, 5, "");
-        uint256 expectedRefundAmount = 10 * 1e4;
         dutchAuction.bid{value:1e5 + 5}();
         uint256 balanceAfter = thisAddress.balance;
         assertEq(1e5, balanceBefore - balanceAfter);
@@ -219,7 +219,7 @@ contract DutchAuctionTest is Test {
         uint256 user2ComAmt = 2e16;
         dutchAuction.bid{value: user2ComAmt}();
 
-        // User3 commit 0.02 ETH wei 7 minutes into the auction -> 1 tokens
+        // User3 commit 0.02 ETH 7 minutes into the auction -> 1 tokens
         vm.warp(block.timestamp + 2 * 60);
         vm.prank(users[2]);
         uint256 user3ComAmt = 2e16;
@@ -243,12 +243,12 @@ contract DutchAuctionTest is Test {
         _startValidDutchAuction();
         address[] memory users = _setUp_Users();
 
-        // User1 commits 0.02 ETH wei at the start of the auction
+        // User1 commits 0.02 ETH at the start of the auction
         vm.prank(users[0]);
         uint256 user1ComAmt = 2e16;
         dutchAuction.bid{value: user1ComAmt}();
 
-        // User2 commits 0.03 wei 5 minutes into the auction
+        // User2 commits 0.03 ETH 5 minutes into the auction
         vm.warp(block.timestamp + 5 * 60);
         vm.prank(users[1]);
         uint256 user2ComAmt = 3e16;
@@ -273,6 +273,33 @@ contract DutchAuctionTest is Test {
         assertEq(user2ComAmt * 1e18 / clearingPrice, token.balanceOf(users[1]));
         assertEq(user3SatisfiedComAmt * 1e18 / clearingPrice, token.balanceOf(users[2]));
         assertGt(1e6, token.balanceOf(address(dutchAuction)));
+        assertFalse(dutchAuction.auctionIsStarted());
+    }
+
+    function test_ClearAuction_WhenNotSoldOut_But_RequireRefund() public {
+        _startValidDutchAuction();
+        address[] memory users = _setUp_Users();
+
+        // User1 commits 0.5 ETH at the start of the auction
+        vm.prank(users[0]);
+        uint256 user1ComAmt = 0.5 ether;
+        dutchAuction.bid{value: user1ComAmt}();
+
+        // User2 commits 0.5 ETH at the start of the auction
+        vm.prank(users[1]);
+        uint256 user2ComAmt = 0.5 ether;
+        dutchAuction.bid{value: user2ComAmt}();
+
+        // Auction ends after 20 minutes, tokens not sold out
+        vm.warp(block.timestamp + 13 * 60 + 1);
+        dutchAuction.clearAuction();
+        
+        // Assert on the settlement logic
+        uint256 clearingPrice = dutchAuction.clearingPrice();
+        assertEq(dutchAuction.reservePrice(), clearingPrice);
+        assertEq(dutchAuction.initialTokenSupply(), token.balanceOf(users[0]));
+        assertEq(0, token.balanceOf(users[1]));
+        assertEq(0, token.balanceOf(address(dutchAuction)));
         assertFalse(dutchAuction.auctionIsStarted());
     }
 

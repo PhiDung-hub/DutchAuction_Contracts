@@ -146,11 +146,25 @@ contract DutchAuction is IDutchAuction, Ownable, ReentrancyGuard {
         }
 
         // Distribute tokens to successful bidders
+        uint256 totalCommitmentCleared = 0;
+        uint256 totalValueOfSupply = WadMath.mulWadDown(initialTokenSupply, clearingPrice);
         for (uint256 i = 0; i < bidders.length; i++) {
             address bidder = bidders[i];
-            uint256 tokenAmount = WadMath.divWadDown(bidderToWei[bidder], clearingPrice);
+            uint256 satisfiedComAmt = bidderToWei[bidder];
+            
+            if (totalCommitmentCleared + bidderToWei[bidder] > totalValueOfSupply) {
+                satisfiedComAmt = totalValueOfSupply - totalCommitmentCleared;
+                uint256 weiToRefund = bidderToWei[bidder] - satisfiedComAmt;
+                _refund(bidder, weiToRefund);
+            }
+
+            if (satisfiedComAmt > 0) {
+                totalCommitmentCleared += satisfiedComAmt;
+                uint256 tokenAmount = WadMath.divWadDown(satisfiedComAmt, clearingPrice);
+                token.transfer(bidder, tokenAmount);
+            }
+
             delete bidderToWei[bidder];
-            token.transfer(bidder, tokenAmount);
         }
 
         uint256 totalNumberOfTokensCommitted = WadMath.divWadDown(totalWeiCommitted, clearingPrice);
