@@ -208,18 +208,18 @@ contract DutchAuctionTest is Test {
         _startValidDutchAuction();
         address[] memory users = _setUp_Users();
 
-        // User1 commit 0.02 ETH at the start of the auction -> 1 tokens
+        // User1 commit 0.02 ETH at the start of the auction
         vm.prank(users[0]);
         uint256 user1ComAmt = 2e16;
         dutchAuction.bid{value: user1ComAmt}();
 
-        // User2 commit 0.02 ETH 5 minutes into the auction -> 1 tokens
+        // User2 commit 0.02 ETH 5 minutes into the auction
         vm.warp(block.timestamp + 5 * 60);
         vm.prank(users[1]);
         uint256 user2ComAmt = 2e16;
         dutchAuction.bid{value: user2ComAmt}();
 
-        // User3 commit 0.02 ETH 7 minutes into the auction -> 1 tokens
+        // User3 commit 0.02 ETH 7 minutes into the auction
         vm.warp(block.timestamp + 2 * 60);
         vm.prank(users[2]);
         uint256 user3ComAmt = 2e16;
