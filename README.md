@@ -1,8 +1,6 @@
-
-
 # Dutch Auction Demo
 
-This is repo contains contracts implementations for Team Tulip (Group ...).
+This is repo contains contracts implementations for Team Tulip.
 
 Contracts have been deployed to Sepolia testnet:
 
@@ -161,7 +159,7 @@ src
 
 ### 1. Install foundry tool chains.
 
-Follow instructions at (https://book.getfoundry.sh/getting-started/installation)[https://book.getfoundry.sh/getting-started/installation]
+Follow instructions at [https://book.getfoundry.sh/getting-started/installation](https://book.getfoundry.sh/getting-started/installation)
 
 ### 2. Run tasks
 
