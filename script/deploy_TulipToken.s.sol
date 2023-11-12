@@ -12,7 +12,7 @@ contract TulipTokenDeployerScript is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        address operator = 0xc24C29e9e71E03447b7FdfAd37198201d6722211;
+        address operator = 0x7Af467D962eFc7a6D3a107DE2CcE6c9312f1f884;
 
         new TulipToken(1e23, operator);
         vm.stopBroadcast();

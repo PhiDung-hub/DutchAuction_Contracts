@@ -19,6 +19,11 @@ pragma solidity ^0.8.20;
  * to protect against it, check out our blog post
  * https://blog.openzeppelin.com/reentrancy-after-istanbul/[Reentrancy After Istanbul].
  */
+
+// NOTE: We have taken EIP-1153 [Transient Storage] into consideration. 
+// Though the Ethereum CanCun upgrade have moved to Q1 2024, therefore we keep
+// a reference of OpenZeppelin ReentrancyGuard here to upgrade it whenever possible.
+//
 abstract contract ReentrancyGuard {
     // Booleans are more expensive than uint256 or any type that takes up a full
     // word because each write operation emits an extra SLOAD to first read the

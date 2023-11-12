@@ -10,8 +10,8 @@ contract StartAuctionCase1 is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-        DutchAuction auction = DutchAuction(0xc24C29e9e71E03447b7FdfAd37198201d6722211);
-        IAuctionableToken token = IAuctionableToken(0x9bfCB9C2BC2A2BF3145A7DfABc7a7b52d4A089E3);
+        DutchAuction auction = DutchAuction(0x7Af467D962eFc7a6D3a107DE2CcE6c9312f1f884);
+        IAuctionableToken token = IAuctionableToken(0x6252cf1805c19F53578a3F47AC4D8AE9398701dc);
         auction.startAuction(token, 1e20, 2e15, 1e15, 20, 10);
         vm.stopBroadcast();
     }
@@ -21,8 +21,8 @@ contract StartAuctionCase2 is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-        DutchAuction auction = DutchAuction(0xc24C29e9e71E03447b7FdfAd37198201d6722211);
-        IAuctionableToken token = IAuctionableToken(0x9bfCB9C2BC2A2BF3145A7DfABc7a7b52d4A089E3);
+        DutchAuction auction = DutchAuction(0x7Af467D962eFc7a6D3a107DE2CcE6c9312f1f884);
+        IAuctionableToken token = IAuctionableToken(0x6252cf1805c19F53578a3F47AC4D8AE9398701dc);
         auction.startAuction(token, 1e20, 2e15, 1e15, 20, 10000);
         vm.stopBroadcast();
     }
