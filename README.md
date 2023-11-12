@@ -241,3 +241,9 @@ forge script script/deploy_TulipToken.s.sol:TulipTokenDeployerScript --rpc-url $
     forge script script/clearAuction.s.sol:ClearAuctionScript --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
     ```
 
+## Tests demonstrating resistance to Reentrancy Attack
++ In the contracts, there are only 2 functions that could be vulnerable to reentrancy attacks: bid and withdraw of the DutchAuction contract.
++ Refer to ReeentrancyAttackOnBid.sol and ReeentrancyAttackOnWithdraw.sol for attacker's reentrancy attack on bid and withdraw functions of the DutchAuction contract respectively, and ReeentrancyAttackOnBid.t.sol and ReeentrancyAttackOnWithdraw.t.sol for proof that the attacks do not work.
++ This is because ReentrancyGuard has been added to the 2 functions. However, even without the Guard, the 2 functions have been written in ways that prevents them from being vulnerable to reentrancy attack:
+    - Withdraw: State changes are made before external function call
+    - Bid: Although this function could be vulnerable, since there is an external function call before state changes, the attack will drain ether from the attack instead of granting them ether. Hence, even without the ReentrancyGuard, carrying out reentrancy attack on the bid function is not economically viable.
