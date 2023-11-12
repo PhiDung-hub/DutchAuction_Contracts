@@ -1,3 +1,5 @@
+
+
 # Dutch Auction Demo
 
 This is repo contains contracts implementations for Team Tulip.
@@ -18,7 +20,7 @@ Deployer: [0x79c5bb4045c756bdb53c6079fac54c288f66ca6b](https://sepolia.etherscan
 
 + **Resilience** [✅]: Contract is robust against re-entrancy attack. Manipulating states before external payable calls. Utilizing Reentrancy Guard, with consideration of Transient storage [EIP-1153] to improve efficiency. NOT PUBLICLY AUDITED YET, USE AT YOUR OWN RISK!
 
-+ **Gas Efficient** [✅]: Try running gas profile to see result (**@see** `Local Instruction / Run tasks / Test`)
++ **Gas Efficient** [✅]: Try running gas profile to see result (**@see** [Local environment set up](#Local-environment-set-up))
 
     + `bid()` consumes about _**95k gas**_.
 
@@ -155,7 +157,7 @@ src
 └── TulipToken.ts [✓]
 ```
 
-## Local Instruction
+## Local environment set up
 
 ### 1. Install foundry tool chains.
 
@@ -191,11 +193,51 @@ forge test --mc <CONTRACT_TO_MATCH>
 
 #### Run scripts
 
-The script require owner key to be stored in `.env` or directly input from [`forge script`](https://book.getfoundry.sh/reference/forge/forge-script#wallet-options---raw)
+The script require owner key to be stored in `.env` or directly input from [`forge script --private-key`](https://book.getfoundry.sh/reference/forge/forge-script#wallet-options---raw)
 
 Operator can deploy contracts and run `startAuction/clearAuction` using ready made script found in `script/` folder.
 
 We hardcoded our demo results in the 2 scenario in the scripts.
 
 Details can be viewed in `script` folder.
+
+### 3. Contracts deployment
+
+Below are steps to deploy contracts on Sepolia testnet:
+
+1. Put deployer private key in `.env` or use explicit flag [`--private-key`](https://book.getfoundry.sh/reference/forge/forge-script#wallet-options---raw)
+
+2. Deploy `DutchAuction`: 
+
+```bash
+forge script script/deploy_DutchAuction.s.sol:DutchAuctionDeployerScript --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+```
+
+
+3. Deploy `TulipToken`: 
+
+```bash
+forge script script/deploy_TulipToken.s.sol:TulipTokenDeployerScript --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+```
+
+
+#### Additional scripts
+
++ Start Auction:
+
+    - Case 1:
+    ```bash
+    forge script script/startAuction.s.sol:StartAuctionCase1 --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+    ```
+
+    - Case 2:
+    ```bash
+    forge script script/startAuction.s.sol:StartAuctionCase2 --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+    ```
+
++ Clear Auction:
+
+    ```bash
+    forge script script/clearAuction.s.sol:ClearAuctionScript --rpc-url $SEPOLIA_RPC_URL --broadcast --verify -vvvv
+    ```
 
